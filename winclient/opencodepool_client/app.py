@@ -25,6 +25,7 @@ class App(tk.Tk):
     PAGES = (
         ("dashboard", "仪表盘"),
         ("accounts", "账号"),
+        ("connect", "接驳"),
     )
 
     def __init__(self, minimized: bool = False, config_override: str = ""):
@@ -224,11 +225,12 @@ class App(tk.Tk):
         self.settings["last_page"] = key
 
     def _create_page(self, key: str):
-        from .pages import accounts, dashboard
+        from .pages import accounts, connect, dashboard
 
         mapping = {
             "dashboard": dashboard.DashboardPage,
             "accounts": accounts.AccountsPage,
+            "connect": connect.ConnectPage,
         }
         return mapping[key](self.content, self)
 
