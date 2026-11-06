@@ -16,8 +16,9 @@ User=agent
 Group=agent
 # 仓库检出位置（python3 -m opencode_pool 要能 import 到包；pip install 过可删掉这行）
 WorkingDirectory=/opt/opencode-pool
-# 配置位置：也可以用 CLI `serve --config /path` 显式指定，两者等价
-Environment=OPENCODE_POOL_CONFIG=/home/agent/.dsh/opencode-pool/pool.config.json
+# 配置位置：不设也行 —— CLI 默认就是 ~/.dsh/opencode-pool/pool.config.json（按服务用户的 HOME 展开）
+# 要放别处就取消下一行注释并改成你的路径，或用 `serve --config /path` 显式指定
+#Environment=OPENCODE_POOL_CONFIG=/absolute/path/to/pool.config.json
 ExecStart=/usr/bin/python3 -m opencode_pool serve
 Restart=always
 RestartSec=3

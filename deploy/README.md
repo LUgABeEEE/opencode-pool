@@ -41,7 +41,7 @@ unit 里三处路径要按实际改（默认写的是这台机器的常见布局
 | --- | --- | --- |
 | `User` / `Group` | `agent` | 运行身份；密钥仓属主要和它一致 |
 | `WorkingDirectory` | `/opt/opencode-pool` | 仓库检出位置（`pip install .` 过可省） |
-| `Environment=OPENCODE_POOL_CONFIG` | `/home/agent/.dsh/opencode-pool/pool.config.json` | 配置绝对路径；用 `~` 不会被展开，必须写全 |
+| `Environment=OPENCODE_POOL_CONFIG` | 默认不设置 | 不设就用服务用户的 `~/.dsh/opencode-pool/pool.config.json`；要自定义必须写**绝对路径**（systemd 不展开 `~`） |
 
 ### 2. 启动与自启
 
