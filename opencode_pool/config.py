@@ -57,7 +57,7 @@ class Provider:
 class Config:
     listen: str = "127.0.0.1:8790"
     relay_token: str = ""
-    credentials_yaml: str = "/data/agent/.dsh/.credentials.yaml"
+    credentials_yaml: str = "~/.dsh/.credentials.yaml"
     secrets_file: str = "~/.dsh/opencode-pool/secrets.json"
     state_file: str = ""
     pid_file: str = ""
@@ -101,6 +101,10 @@ class Config:
         cfg = cls.from_dict(raw)
         cfg.source_path = os.path.abspath(path)
         base = os.path.dirname(os.path.abspath(path))
+        for attr in ("credentials_yaml", "secrets_file"):
+            value = getattr(cfg, attr)
+            if value:
+                setattr(cfg, attr, os.path.expanduser(value))
         for attr in ("state_file", "pid_file", "credentials_yaml", "secrets_file"):
             value = getattr(cfg, attr)
             if value and not os.path.isabs(value):

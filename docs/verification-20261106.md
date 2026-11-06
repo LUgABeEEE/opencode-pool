@@ -1,7 +1,7 @@
 # v0.2.0 端到端验收记录（2026-11-06 18:26–18:33 CST）
 
-- 验收对象：`/data/agent/workspace/opencode-pool`（工作区当前文件；该目录**不是 git 仓库**，无法记录 commit）
-- 宿主：SER8 · Python 3.12.3 · Node v22.23.4
+- 验收对象：`<project-dir>`（工作区当前文件；该目录**不是 git 仓库**，无法记录 commit）
+- 宿主：Python 3.12.3 · Node v22.23.4
 - 运行态：`~/.dsh/opencode-pool/`（配置 `pool.config.json`、状态 `pool_state.json`、日志 `relay.log`），监听 `127.0.0.1:8790`
 - 验收人：review（只验证与记录，未改任何代码）
 - 说明：`/v1/*` 需要 `relay_token`，实测时从配置文件读出到 shell 变量使用，**未在记录或输出里回显 token**
@@ -83,7 +83,7 @@ pid 文件 285489 → ./scripts/start.sh stop（已停止，8790 释放）
 - 字段覆盖：`Config` 的 **14 个可配置标量字段**（`version/listen/relay_token/credentials_yaml/secrets_file/state_file/pid_file/usage_refresh_seconds/upstream_timeout/min_headroom/max_inflight/min_interval_seconds/queue_wait_seconds/sticky_ttl_seconds`）与 `providers`/`accounts` 两张表在文档中**全部出现**；唯一未写进用户表格的是内部字段 `warnings`（v1 自动迁移提示，用户不可配置，属合理省略）。
 - 文档"默认值"列与 `cli.py::TEMPLATE`（`init` 实际写出的配置）逐项一致：`listen=127.0.0.1:8790`、`relay_token=""`、`usage_refresh_seconds=90`、`upstream_timeout=900`、`state_file=pool_state.json`、`pid_file=relay.pid`、`secrets_file=~/.dsh/opencode-pool/secrets.json`、`credentials_yaml=~/.dsh/.credentials.yaml`、`sticky_ttl_seconds=43200`。
 - 运行态交叉验证：`/v1/usage.sticky.ttl_seconds=43200`、`/healthz.fresh_within_seconds=180`（=2×90）、`min_headroom=2` 使 go25 判 below_reserve —— 与文档描述一致。
-- **口径提示（非阻断）**：`Config` 数据类的兜底默认值与文档不同 —— `state_file=""`、`pid_file=""`、`credentials_yaml=/data/agent/.dsh/.credentials.yaml`（本机绝对路径）。即字段不写时，`state_file`/`pid_file` 是"关闭持久化"，`credentials_yaml` 落到本机路径而不是 `~/.dsh/.credentials.yaml`。文档描述的是 `init` 生成值，建议在表格里加一句"未写时的兜底"以免误读。
+- **口径提示（非阻断）**：`Config` 数据类的兜底默认值与文档不同 —— `state_file=""`、`pid_file=""`、`credentials_yaml=~/.dsh/.credentials.yaml`（本机绝对路径）。即字段不写时，`state_file`/`pid_file` 是"关闭持久化"，`credentials_yaml` 落到本机路径而不是 `~/.dsh/.credentials.yaml`。文档描述的是 `init` 生成值，建议在表格里加一句"未写时的兜底"以免误读。
 
 ### 3.2 `adapters.md` 最小示例
 
@@ -118,7 +118,7 @@ pid 文件 285489 → ./scripts/start.sh stop（已停止，8790 释放）
 ## 6. 复跑命令
 
 ```bash
-cd /data/agent/workspace/opencode-pool
+cd <project-dir>
 python3 -m unittest discover -s tests
 node --test tests/plugin.test.mjs
 ./scripts/start.sh status

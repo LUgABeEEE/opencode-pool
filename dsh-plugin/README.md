@@ -22,7 +22,7 @@ dsh plugin add /path/to/opencode-pool/dsh-plugin
 | 客户端 `lib/client.js` | 侧边栏条目 + 主面板（iframe 指向 `api/opencode-pool/panel`） |
 
 为什么不用 iframe 直接连 `127.0.0.1:8790`：面板可能从局域网打开
-（`http://192.168.1.11:3080`），那时浏览器里的 127.0.0.1 是**用户自己的电脑**。
+（`http://<局域网地址>:3080`），那时浏览器里的 127.0.0.1 是**用户自己的电脑**。
 经 dsh-web 转一次，局域网也能用；顺带把 token 留在服务端。
 
 面板本身仍是 `opencode_pool/panel/panel.html` 那一份，两个入口共用：

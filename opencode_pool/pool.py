@@ -50,7 +50,7 @@ class KeyStore:
     """
 
     def __init__(self, credentials_yaml: str, secrets_file: str = ""):
-        self._path = credentials_yaml
+        self._path = os.path.expanduser(credentials_yaml or "")
         self.store = SecretStore(secrets_file)
         self._refs: dict[str, str] | None = None
         self._lock = threading.Lock()

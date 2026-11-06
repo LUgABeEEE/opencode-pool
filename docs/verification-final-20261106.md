@@ -1,12 +1,12 @@
 # v0.2.0 最终端到端验收记录（覆盖 t5/t8/t9 当前字节）
 
 - 时间：2026-11-06 19:03–19:22 CST
-- 对象：`/data/agent/workspace/opencode-pool`（工作区当前文件；非 git 仓库，按 mtime 记录快照）
+- 对象：`<project-dir>`（工作区当前文件；非 git 仓库，按 mtime 记录快照）
 - 代码快照：`opencode_pool/{pool,server,config,secrets,reqlog}.py` 18:49–18:50、`scripts/stats.py` 18:54、
   `tests/test_opencode_pool.py` 18:54
 - 文档快照：`configuration.md` / `docs/analytics.md` 19:07:30、`README.md` / `CHANGELOG.md` 19:07:54
   （**mtime 晚于本任务开始**：t9 的文档是在本验收进行中补上的，见第 7 节说明）
-- 宿主：SER8 · Python 3.12.3 · Node v22.23.4 · 中转 `127.0.0.1:8790`
+- 宿主：Python 3.12.3 · Node v22.23.4 · 中转 `127.0.0.1:8790`
 - 验收人：review（只验证与记录，未改任何代码；`/v1/*` 的 relay token 从配置读入 shell 变量使用，未回显）
 
 ---
@@ -78,7 +78,7 @@
 ### 4.2 `scripts/stats.py` 实跑（原样输出）
 
 ```
-requests.jsonl · /data/agent/.dsh/opencode-pool/requests.jsonl
+requests.jsonl · ~/.dsh/opencode-pool/requests.jsonl
 总请求: 51  成功率: 96.1% (49/51)
 outcome: ok=49 passthrough=2
 延迟(ms): p50=6255.2 p95=15146.6
@@ -149,7 +149,7 @@ ConnectionResetError)` 吞掉了，异常不会再冒到 `RelayServer.handle_err
 ## 9. 复跑命令
 
 ```bash
-cd /data/agent/workspace/opencode-pool
+cd <project-dir>
 for i in $(seq 1 10); do python3 -m unittest discover -s tests 2>&1 | tail -1; done
 node --test tests/plugin.test.mjs
 ./scripts/verify.sh 20

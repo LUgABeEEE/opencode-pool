@@ -21,8 +21,9 @@ if command -v journalctl >/dev/null 2>&1; then
   echo "近 10 分钟日志里 opencode-pool 相关行：$hits"
   journalctl -u dsh-web --since '-10 min' --no-pager 2>/dev/null | grep "opencode-pool" | tail -5
 fi
-if [ -f /data/agent/logs/dsh-web-restart.log ]; then
-  echo "重启日志尾部："; tail -6 /data/agent/logs/dsh-web-restart.log
+DSH_LOG_DIR="${DSH_LOG_DIR:-$HOME/.dsh/logs}"
+if [ -f "$DSH_LOG_DIR/dsh-web-restart.log" ]; then
+  echo "重启日志尾部："; tail -6 "$DSH_LOG_DIR/dsh-web-restart.log"
 fi
 
 echo
