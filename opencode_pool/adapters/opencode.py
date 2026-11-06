@@ -12,7 +12,6 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from typing import Any
 
 from .base import (Adapter, ErrorDecision, Field, QuotaSnapshot, WindowSpec, WindowState,
                    conversation_seed, parse_iso)

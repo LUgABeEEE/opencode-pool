@@ -15,7 +15,6 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import requests
 
-from . import adapters
 from .adapters.base import ErrorDecision
 from .pool import Pool
 from .reqlog import (allowance_field, iso_now, new_request_record,
@@ -46,12 +45,12 @@ def _cooldown(reason: str, seconds: float) -> ErrorDecision:
 def config_path(pool: "Pool | None" = None) -> str:
     """写回必须落在「这份池子自己读的那份配置」上。
 
-    曾经写死成 HERE/pool.config.json，用临时配置起的实例一改配置就动到了生产文件 ——
-    所以路径跟着 Config 走，没有才退回默认。
+    曾经写死成包目录下的 pool.config.json，用临时配置起的实例一改配置就动到了生产文件 ——
+    所以路径跟着 Config 走，没有才退回默认（包目录旁的那份）。
     """
     if pool is not None and getattr(pool.cfg, "source_path", ""):
         return pool.cfg.source_path
-    return os.path.join(HERE, "pool.config.json")
+    return os.path.join(PKG_DIR, os.pardir, "pool.config.json")
 
 
 def write_config(mutator, pool: "Pool | None" = None) -> str:

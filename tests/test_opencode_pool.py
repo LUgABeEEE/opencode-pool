@@ -31,7 +31,7 @@ sys.path.insert(0, ROOT)
 from opencode_pool import adapters  # noqa: E402
 from opencode_pool.adapters.base import ErrorDecision, WindowState  # noqa: E402
 from opencode_pool.config import Config  # noqa: E402
-from opencode_pool.pool import STICKY_MAX, Account, KeyStore, Pool  # noqa: E402
+from opencode_pool.pool import STICKY_MAX, KeyStore, Pool  # noqa: E402
 from opencode_pool.secrets import SecretStore, fingerprint  # noqa: E402
 
 adapters.load_all()
