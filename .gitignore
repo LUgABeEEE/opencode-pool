@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.run/
+.bak/
+dist/
+build/
+*.egg-info/
+# 密钥与运行态永远不进仓库（默认在 ~/.dsh/opencode-pool）
+secrets.json
+pool_state.json
+*.log

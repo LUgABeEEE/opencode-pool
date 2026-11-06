@@ -1,0 +1,23 @@
+{
+  "name": "dsh-plugin-opencode-pool",
+  "version": "0.1.0",
+  "description": "OpenCode 号池：把多个 OpenCode Go 订阅账号合成一个 OpenAI 兼容入口，在 DSH 里管理账号、额度与轮换",
+  "type": "module",
+  "license": "MIT",
+  "icon": "./assets/icon.svg",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json",
+    "./icon": "./assets/icon.svg"
+  },
+  "files": ["lib", "assets/icon.svg", "cordis.patch.yml", "README.md"],
+  "dsh": {
+    "manifestVersion": 1,
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": { "platform": "web" }
+  },
+  "engines": { "node": ">=20" },
+  "keywords": ["dsh", "dsh-plugin", "deepseek-harness", "opencode", "account-pool", "relay", "openai-compatible"]
+}

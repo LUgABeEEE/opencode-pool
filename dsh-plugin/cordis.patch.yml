@@ -1,0 +1,23 @@
+# dsh-plugin-opencode-pool — bundle patch
+#
+# 由 `dsh plugin add dsh-plugin-opencode-pool` 读取；只贡献一行 Loader 配置。
+# 不要在 profile 的 cordis.patch.yml 里重复这段 insert（id 重复会让设置页保存变歧义）。
+# 要从 profile 覆盖配置，只写顶层行：
+#     - id: opencode-pool
+#       config: { ... }        # 整体替换，不是深合并
+- insert:
+    - id: opencode-pool
+      name: 'dsh-plugin-opencode-pool'
+      config:
+        # 中转进程监听地址（插件会自己拉起 python 服务）
+        host: 127.0.0.1
+        port: 8790
+        # Python 项目目录（含 opencode_pool 包）。留空 = 从环境变量
+        # OPENCODE_POOL_HOME 或 ~/.dsh/opencode-pool 推断。
+        projectDir: ''
+        python: python3
+        # DSH 启动时自动拉起中转；关掉就只代理已有实例
+        autostart: true
+        # 中转配置与日志位置
+        configPath: ~/.dsh/opencode-pool/pool.config.json
+        logPath: ~/.dsh/opencode-pool/relay.log

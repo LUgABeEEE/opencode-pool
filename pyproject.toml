@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "opencode-pool"
+version = "0.1.0"
+description = "OpenCode 号池：把多个 OpenCode Go 订阅账号合成一个 OpenAI 兼容入口"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = ["requests>=2.28"]
+keywords = ["opencode", "account-pool", "relay", "openai-compatible", "dsh-plugin"]
+
+[project.scripts]
+opencode-pool = "opencode_pool.cli:main"
+
+[tool.setuptools]
+packages = ["opencode_pool", "opencode_pool.adapters"]
+
+[tool.setuptools.package-data]
+opencode_pool = ["panel/*.html"]

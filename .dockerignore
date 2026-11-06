@@ -1,0 +1,20 @@
+# 构建上下文只要包本体与元数据；测试、插件、文档、杂项都不进镜像
+.git
+.github
+.gitignore
+**/__pycache__
+*.pyc
+*.pyo
+tests/
+dsh-plugin/
+docs/
+deploy/
+scripts/
+*.md
+!README.md
+pool.config.json
+pool_state.json
+secrets.json
+*.bak-*
+selfcheck/
+.agent-teams/

@@ -1,0 +1,50 @@
+# CI：语法 + 回归。不联网打外部服务、不需要任何密钥。
+#   python —— compileall（语法）+ stdlib unittest 回归（矩阵 3.10/3.11/3.12）
+#   node   —— DSH 插件纯逻辑测试 node:test（矩阵 20/22）
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: 语法检查（compileall，不联网）
+        run: python3 -m compileall -q opencode_pool tests
+
+      # 测试本身不联网、不起真实上游（端到端用例起本地 FakeUpstream）；
+      # 唯一运行时依赖 requests 从 PyPI 装一次即可。
+      - name: 安装依赖
+        run: python3 -m pip install requests
+
+      - name: Python 回归（unittest）
+        run: python3 -m unittest discover -s tests
+
+  node:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [20, 22]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      # 纯逻辑测试：零依赖、不联网、不启动服务
+      - name: DSH 插件测试（node:test）
+        run: node --test tests/plugin.test.mjs

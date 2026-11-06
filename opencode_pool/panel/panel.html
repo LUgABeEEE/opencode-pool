@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>号池中转 · 控制台</title>
+<style>
+  :root{
+    /* 与 dsh-web 面板同一套语义令牌（--dsw-alias-*），这里给出落地值 */
+    --bg:#0b0e14; --layer1:#141a24; --layer2:#1b2230; --line:#263141; --line2:#38455c;
+    --ink:#e8eef8; --dim:#93a1b8; --faint:#6b7a92;
+    --brand:#6ea8ff; --ok:#3ddc97; --warn:#ffc857; --bad:#ff7b72;
+    --w5:#5aa9ff; --wk:#b58cff; --wm:#4fd1c5;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Noto Sans SC","Microsoft YaHei",sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.55 var(--sans);-webkit-font-smoothing:antialiased}
+  .page{max-width:1120px;margin:0 auto;padding:0 20px 64px}
+
+  .top{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+    padding:14px 0 12px;margin-bottom:4px;background:linear-gradient(var(--bg) 78%,rgba(11,14,20,0));
+    border-bottom:1px solid var(--line)}
+  .brandmark{display:flex;flex-direction:column;gap:1px;min-width:0}
+  .brandmark h1{margin:0;font-size:16px;font-weight:650;letter-spacing:-.01em}
+  .brandmark .up{font-family:var(--mono);font-size:11px;color:var(--faint);letter-spacing:-.01em;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:520px}
+  .live{display:inline-flex;align-items:center;gap:6px;margin-left:auto;font-size:12px;color:var(--dim);
+    border:1px solid var(--line);background:var(--layer1);border-radius:999px;padding:4px 11px;white-space:nowrap}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px rgba(61,220,151,.14)}
+  .dot.warn{background:var(--warn);box-shadow:0 0 0 3px rgba(255,200,87,.14)}
+  .dot.bad{background:var(--bad);box-shadow:0 0 0 3px rgba(255,123,114,.14)}
+  .actions{display:flex;gap:6px}
+  button{font:inherit;font-size:12.5px;color:var(--ink);background:var(--layer1);border:1px solid var(--line);
+    border-radius:9px;padding:6px 12px;cursor:pointer;transition:border-color .15s,background .15s,color .15s}
+  button:hover:not(:disabled){border-color:var(--line2);background:var(--layer2)}
+  button:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+  button:disabled{opacity:.5;cursor:default}
+  button.ghost{background:transparent;color:var(--dim)}
+  button.ghost:hover:not(:disabled){color:var(--ink);background:var(--layer1)}
+
+  .eyebrow{display:flex;align-items:baseline;gap:10px;margin:24px 0 10px;
+    font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+  .eyebrow::after{content:"";flex:1;height:1px;background:var(--line)}
+  .eyebrow b{color:var(--dim);font-weight:600;letter-spacing:.1em}
+  .eyebrow em{font-style:normal;font-family:var(--mono);letter-spacing:0;text-transform:none;color:var(--faint)}
+
+  .windows{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+  .win{position:relative;background:var(--layer1);border:1px solid var(--line);border-radius:14px;
+    padding:14px 16px 13px;overflow:hidden}
+  .win::before{content:"";position:absolute;inset:0 auto 0 0;width:2px;background:var(--hue)}
+  .win .k{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--dim);letter-spacing:.04em}
+  .win .k i{width:7px;height:7px;border-radius:2px;background:var(--hue);display:inline-block}
+  .win .v{display:flex;align-items:baseline;gap:5px;margin:6px 0 2px}
+  .win .v b{font-size:30px;font-weight:680;letter-spacing:-.03em;font-variant-numeric:tabular-nums;line-height:1.05}
+  .win .v span{font-size:12px;color:var(--dim)}
+  .win .meta{font-size:11.5px;color:var(--faint);font-family:var(--mono);white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis}
+  .win .bar{height:4px;border-radius:2px;background:var(--layer2);margin-top:10px;overflow:hidden}
+  .win .bar i{display:block;height:100%;background:var(--hue);border-radius:2px;transition:width .6s ease}
+  .win.urgent .v b{color:var(--bad)}
+  .win.urgent .bar i{background:var(--bad)}
+  .win.plain .v b{font-size:15px;color:var(--dim);letter-spacing:0;font-weight:500}
+
+  .accounts{display:flex;flex-direction:column;gap:10px}
+  .acct{display:grid;grid-template-columns:86px minmax(0,1fr) 210px;gap:18px;align-items:center;
+    background:var(--layer1);border:1px solid var(--line);border-radius:14px;padding:14px 16px;
+    transition:border-color .15s,background .15s}
+  .acct:hover{border-color:var(--line2)}
+  .acct.dead{background:linear-gradient(90deg,rgba(255,123,114,.055),var(--layer1) 42%)}
+  .acct.off{opacity:.55}
+  .rings{width:86px;height:86px;display:block}
+  .rings circle{fill:none;stroke-linecap:round;
+    transition:stroke-dashoffset .7s cubic-bezier(.3,.8,.3,1),stroke .3s}
+  .rings .track{stroke:rgba(255,255,255,.055)}
+  .rings text{font-family:var(--mono);font-weight:600;text-anchor:middle;font-variant-numeric:tabular-nums}
+  .main{min-width:0;display:flex;flex-direction:column;gap:7px}
+  .line{display:flex;align-items:center;gap:9px;flex-wrap:wrap;min-width:0}
+  .name{font-family:var(--mono);font-size:13px;font-weight:600;letter-spacing:.01em}
+  .prov{font-family:var(--mono);font-size:10.5px;color:var(--faint);border:1px solid var(--line);
+    border-radius:6px;padding:2px 6px}
+  .pill{font-size:10.5px;line-height:1;padding:4px 7px;border-radius:6px;border:1px solid transparent;
+    letter-spacing:.04em;white-space:nowrap}
+  .pill.ok{color:var(--ok);background:rgba(61,220,151,.1);border-color:rgba(61,220,151,.25)}
+  .pill.warn{color:var(--warn);background:rgba(255,200,87,.1);border-color:rgba(255,200,87,.25)}
+  .pill.bad{color:var(--bad);background:rgba(255,123,114,.1);border-color:rgba(255,123,114,.25)}
+  .pill.mute{color:var(--dim);background:var(--layer2);border-color:var(--line)}
+  .nums{display:flex;gap:14px;flex-wrap:wrap;font-family:var(--mono);font-size:11.5px;color:var(--dim)}
+  .nums b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+  .nums .dead{color:var(--bad)}
+
+  .life{position:relative;height:30px;margin-top:5px;max-width:470px}
+  .life .rail{position:absolute;left:0;right:0;top:3px;height:5px;border-radius:3px;background:var(--layer2)}
+  .life .fill{position:absolute;left:0;top:3px;height:5px;border-radius:3px;min-width:3px;
+    background:linear-gradient(90deg,rgba(255,200,87,.8),rgba(255,123,114,.95));transition:width .7s ease}
+  .life.safe .fill{background:linear-gradient(90deg,rgba(61,220,151,.5),rgba(61,220,151,.85))}
+  .life .reset{position:absolute;right:0;top:0;width:1px;height:11px;background:var(--line2)}
+  .life .cap{position:absolute;font-size:10.5px;color:var(--faint);font-family:var(--mono);white-space:nowrap}
+  .life .cap.burn{left:0;top:12px}
+  .life .cap.end{right:0;top:12px;text-align:right}
+  .life:not(.safe):not(.unknown) .cap.burn{color:var(--warn)}
+
+  .side{display:flex;flex-direction:column;gap:8px;align-items:stretch}
+  .side .stats{display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;font-family:var(--mono);
+    font-size:11.5px;color:var(--faint)}
+  .side .stats b{display:block;color:var(--ink);font-size:13px;font-weight:600;font-variant-numeric:tabular-nums}
+  .side .row{display:flex;gap:6px}
+  .side button{flex:1;padding:5px 10px;font-size:11.5px;white-space:nowrap}
+
+  .note{margin-top:22px;font-size:11.5px;color:var(--faint);display:flex;gap:14px;flex-wrap:wrap}
+  .note code{font-family:var(--mono);color:var(--dim)}
+  #banner{display:none;margin:14px 0 0;padding:10px 14px;border-radius:10px;font-size:12.5px;
+    background:rgba(255,200,87,.07);border:1px solid rgba(255,200,87,.3);color:var(--warn);
+    white-space:pre-wrap;font-family:var(--mono);font-size:11.5px}
+  #toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,14px);opacity:0;pointer-events:none;
+    background:var(--layer2);border:1px solid var(--line2);color:var(--ink);border-radius:10px;
+    padding:9px 16px;font-size:12.5px;transition:opacity .2s,transform .2s;z-index:50}
+  #toast.show{opacity:1;transform:translate(-50%,0)}
+  .skeleton{color:var(--faint);font-size:12.5px;padding:18px 0}
+  button.danger{color:var(--bad);border-color:rgba(255,123,114,.3)}
+  button.danger:hover:not(:disabled){background:rgba(255,123,114,.1);border-color:var(--bad)}
+  #btn-add{margin-left:auto;text-transform:none;letter-spacing:0;font-size:12px;padding:4px 10px}
+
+  dialog{background:var(--layer1);color:var(--ink);border:1px solid var(--line2);border-radius:14px;
+    padding:0;width:min(460px,calc(100vw - 32px));box-shadow:0 24px 60px rgba(0,0,0,.55)}
+  dialog::backdrop{background:rgba(6,9,14,.66)}
+  .dlg-head{padding:16px 18px 10px;border-bottom:1px solid var(--line)}
+  .dlg-head h2{margin:0;font-size:15px;font-weight:650}
+  .dlg-head p{margin:4px 0 0;font-size:11.5px;color:var(--faint)}
+  .dlg-body{display:flex;flex-direction:column;gap:12px;padding:16px 18px}
+  .dlg-body label{display:flex;flex-direction:column;gap:5px;font-size:11.5px;color:var(--dim)}
+  .dlg-body input, .dlg-body select{font:inherit;font-size:13px;color:var(--ink);background:var(--bg);
+    border:1px solid var(--line);border-radius:9px;padding:8px 10px;outline:none}
+  .dlg-body input:focus, .dlg-body select:focus{border-color:var(--brand)}
+  .dlg-body .hint{font-size:11px;color:var(--faint);line-height:1.5}
+  .dlg-foot{display:flex;gap:8px;justify-content:flex-end;padding:12px 18px 16px;border-top:1px solid var(--line)}
+  .dlg-foot button[type=submit]{background:var(--brand);border-color:var(--brand);color:#08111f;font-weight:650}
+  .dlg-foot button[type=submit]:hover:not(:disabled){background:#8dbcff;border-color:#8dbcff}
+  #dlg-error{display:none;font-size:12px;color:var(--bad);white-space:pre-wrap}
+
+  @media (max-width:900px){
+    .acct{grid-template-columns:72px minmax(0,1fr);gap:12px}
+    .rings{width:72px;height:72px}
+    .side{grid-column:1/-1;flex-direction:row;align-items:flex-end;gap:12px;flex-wrap:wrap}
+    .side .stats{grid-template-columns:repeat(2,minmax(64px,1fr));flex:1}
+    .side .row{flex:0 0 auto}
+    .windows{grid-template-columns:1fr}
+    .life{height:44px;max-width:none}
+    .life .cap.end{right:auto;left:0;top:27px;text-align:left}
+  }
+  @media (prefers-reduced-motion:reduce){ *{transition:none!important;animation:none!important} }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="top">
+    <div class="brandmark">
+      <h1>号池中转</h1>
+      <div class="up" id="upstream">读取配置中…</div>
+    </div>
+    <div class="live" id="live"><span class="dot" id="livedot"></span><span id="livetext">连接中…</span></div>
+    <div class="actions">
+      <button id="btn-refresh" title="立即向上游重新查询额度">立即刷新</button>
+      <button id="btn-reload" class="ghost" title="重读 pool.config.json，不用重启进程">重载配置</button>
+      <button id="btn-clear" class="ghost" title="清掉所有账号的冷却标记">清冷却</button>
+    </div>
+  </header>
+
+  <div id="banner"></div>
+
+  <div id="window-sections"><div class="skeleton">读取中…</div></div>
+
+  <div class="eyebrow"><b>账号</b><span id="acct-count">—</span>
+    <button id="btn-add" class="ghost" title="添加一个账号（写进配置并新建密钥槽位）">+ 添加账号</button>
+  </div>
+  <section class="accounts" id="accounts"><div class="skeleton">读取中…</div></section>
+
+  <div class="note">
+    <span id="stamp">—</span>
+    <span>额度采样每 60–90 秒一次</span>
+    <span>寿命带：<code>现在 → 预计耗尽 → 额度重置</code></span>
+    <span id="sticky-note">—</span>
+    <span id="adapter-note">—</span>
+  </div>
+</div>
+
+<dialog id="dlg">
+  <form method="dialog" id="dlg-form">
+    <div class="dlg-head">
+      <h2 id="dlg-title">添加账号</h2>
+      <p id="dlg-sub">密钥写入 ~/.dsh/opencode-pool/secrets.json（0600），不会回显</p>
+    </div>
+    <div class="dlg-body">
+      <label>账号名
+        <input id="f-name" name="name" placeholder="go03" autocomplete="off" spellcheck="false">
+      </label>
+      <label id="row-provider">上游
+        <select id="f-provider"></select>
+      </label>
+      <label>密钥
+        <input id="f-key" name="key" type="password" autocomplete="new-password" placeholder="粘贴 API key">
+      </label>
+      <label id="row-slot">凭据槽位（可留空，自动生成）
+        <input id="f-slot" name="slot" placeholder="POOL_KEY_GO03" autocomplete="off" spellcheck="false">
+      </label>
+      <div class="hint" id="f-hint"></div>
+      <div id="dlg-error"></div>
+    </div>
+    <div class="dlg-foot">
+      <button type="button" class="ghost" id="dlg-cancel">取消</button>
+      <button type="submit" id="dlg-ok">保存</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="toast"></div>
+
+<script>
+const TOKEN = __POOL_TOKEN__;
+/* 同一个面板两个入口：
+   - 直连中转：location.pathname = "/"          → API 前缀 ""
+   - 经 dsh-web：…/api/opencode-pool/panel      → API 前缀 "…/api/opencode-pool"
+   用 pathname 反推，子路径部署也不会错。 */
+const API_BASE = location.pathname.endsWith("/panel")
+  ? location.pathname.slice(0, -"/panel".length)
+  : "";
+const RADII = [30, 21, 12];
+const STROKE = 3.5;
+const HUES = ["var(--w5)", "var(--wk)", "var(--wm)"];
+const C = r => 2 * Math.PI * r;
+
+let SCHEMA = null;
+let timer = null;
+
+/* ── 小工具 ─────────────────────────────────────────────── */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const providers = () => (SCHEMA && SCHEMA.providers) || {};
+const providerOf = a => providers()[a.provider] || { windows: [] };
+const windowsOf = a => (providerOf(a).windows || []).slice(0, RADII.length);
+const hueOf = (spec, i) => spec.hue || HUES[i % HUES.length];
+
+function pct(v){ if (v === null || v === undefined) return "—";
+  return (v > 0 && v < 10) ? v.toFixed(1) : String(Math.round(v)); }
+function dur(s){
+  if (s === null || s === undefined) return "—";
+  if (s < 60) return "不到 1 分钟";
+  const m = Math.floor(s/60), h = Math.floor(m/60), d = Math.floor(h/24);
+  if (d > 0) return `${d} 天 ${h%24} 小时`;
+  if (h > 0) return `${h} 小时 ${m%60} 分`;
+  return `${m} 分钟`;
+}
+function when(epoch){
+  if (!epoch) return "—";
+  const diff = epoch * 1000 - Date.now();
+  return diff > 0 ? `${dur(diff/1000)}后` : "已过";
+}
+function clock(ts){ return new Date((ts||0)*1000).toLocaleTimeString("zh-CN",{hour12:false}); }
+/* 粘性 TTL 用人类单位：默认 12 小时，写成「720 分」没人读得出来 */
+function ttlText(seconds){
+  const s = Number(seconds) || 0;
+  if (s <= 0) return "关闭";
+  if (s >= 3600){
+    const hours = s / 3600;
+    return `${Number.isInteger(hours) ? hours : hours.toFixed(1)} 小时`;
+  }
+  if (s >= 60) return `${Math.round(s / 60)} 分钟`;
+  return `${Math.round(s)} 秒`;
+}
+function toast(msg){
+  const el = $("#toast"); el.textContent = msg; el.classList.add("show");
+  clearTimeout(el._t); el._t = setTimeout(()=>el.classList.remove("show"), 1900);
+}
+function winPct(a, key){
+  const derived = (a.percent || {})[key];
+  if (derived !== undefined && derived !== null) return derived;
+  const state = (a.windows || {})[key];
+  return (state && state.percent !== undefined) ? state.percent : 0;
+}
+function winState(a, key){ return (a.windows || {})[key] || {}; }
+function isDead(a, key){
+  const st = winState(a, key);
+  return (st.status && st.status !== "ok" && st.status !== "unknown") || winPct(a, key) >= 100;
+}
+function keyPill(a){
+  const k = a.key || {};
+  if (!k.configured) return `<span class="pill bad" title="槽位 ${esc(k.slot || '?')}">缺密钥</span>`;
+  const src = {pool: "面板", dsh: "DSH", env: "ENV"}[k.source] || k.source || "?";
+  return `<span class="pill mute" title="槽位 ${esc(k.slot || '?')} · 来源 ${esc(src)} · 指纹 ${esc(k.fingerprint || '')}">密钥 ${esc(src)} ${esc(k.fingerprint || '')}</span>`;
+}
+
+function reasonText(r){
+  if (!r) return "";
+  if (r.startsWith("quota:")) return `${labelOf(r.slice(6))}额度打满`;
+  if (r === "auth:401") return "凭据失效";
+  if (r === "missing-key") return "缺 key";
+  if (r.startsWith("net:")) return "网络错误";
+  if (r.startsWith("upstream:")) return "上游错误";
+  if (r === "rate-limited") return "限流";
+  return r;
+}
+function labelOf(key){
+  for (const p of Object.values(providers())) {
+    const hit = (p.windows || []).find(w => w.key === key);
+    if (hit) return hit.label;
+  }
+  return key;
+}
+
+/* ── 三环 ───────────────────────────────────────────────── */
+function rings(a){
+  const specs = windowsOf(a);
+  if (!specs.length) {
+    return `<svg class="rings" viewBox="0 0 72 72" role="img" aria-label="该上游无额度观测">
+      <circle cx="36" cy="36" r="16" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="1.5" stroke-dasharray="3 4"/>
+      <text x="36" y="41" font-size="13" fill="var(--faint)">?</text></svg>`;
+  }
+  const parts = specs.map((spec, i) => {
+    const r = RADII[i];
+    const used = Math.max(0, Math.min(100, winPct(a, spec.key)));
+    const len = C(r) * used / 100;
+    const stroke = isDead(a, spec.key) ? "var(--bad)" : used >= 85 ? "var(--warn)" : hueOf(spec, i);
+    const arc = used < 0.5 ? "" :
+      `<circle r="${r}" stroke-width="${STROKE}" stroke="${stroke}"
+               stroke-dasharray="${len.toFixed(1)} ${(C(r)-len).toFixed(1)}" stroke-dashoffset="0"/>`;
+    return `<circle class="track" r="${r}" stroke-width="${STROKE}"/>${arc}`;
+  }).join("");
+  const h = a.headroom;
+  const label = (h === null || h === undefined || h < 0) ? "—" : Math.round(h);
+  const tone = (h === null || h === undefined) ? "var(--faint)" : h < 0 ? "var(--bad)" : h < 15 ? "var(--warn)" : "var(--ink)";
+  const aria = specs.map(s => `${s.label}已用 ${pct(winPct(a, s.key))}%`).join("，");
+  return `<svg class="rings" viewBox="0 0 72 72" role="img" aria-label="${aria}">
+    <g transform="translate(36,36) rotate(-90)">${parts}</g>
+    <text x="36" y="41" font-size="14" fill="${tone}">${label}</text></svg>`;
+}
+
+/* ── 寿命带 ─────────────────────────────────────────────── */
+function life(a){
+  const specs = windowsOf(a);
+  if (!specs.length){
+    return `<div class="life unknown"><div class="rail"></div>
+      <span class="cap burn">该上游不提供余量观测，按轮询 + 冷却调度</span></div>`;
+  }
+  const key = a.binding_window || specs[0].key;
+  const spec = specs.find(s => s.key === key) || specs[0];
+  const state = winState(a, key);
+  const eta = (a.eta_seconds || {})[key];
+  const resetsAt = state.resets_at;
+  const totalS = resetsAt ? resetsAt - Date.now()/1000 : null;
+  const endCap = resetsAt ? `${spec.label}额度 ${when(resetsAt)}重置` : "无重置时间";
+
+  /* 余量保留中：与状态胶囊同一句话，避免"胶囊说保留、寿命带还在算耗尽" */
+  if (a.below_reserve){
+    return `<div class="life unknown"><div class="rail"></div>
+      <span class="cap burn">余量保留中 · 不参与调度</span><span class="cap end">${endCap}</span></div>`;
+  }
+
+  if (eta === null || eta === undefined || !totalS || totalS <= 0){
+    const rate = (a.rate_per_hour || {})[key];
+    const why = (rate === 0) ? "当前没有消耗" : "样本不足，测不出速率";
+    return `<div class="life unknown"><div class="rail"></div>
+      <span class="cap burn">${why}</span><span class="cap end">${endCap}</span></div>`;
+  }
+  const frac = eta / totalS;
+  if (frac >= 1){
+    return `<div class="life safe"><div class="rail"></div><div class="fill" style="width:100%"></div>
+      <span class="cap burn">撑得到重置 · 预计 ${dur(eta)}后耗尽</span>
+      <span class="cap end">${endCap}</span></div>`;
+  }
+  return `<div class="life"><div class="rail"></div>
+    <div class="fill" style="width:${Math.max(1.2, frac*100).toFixed(1)}%"></div>
+    <span class="cap burn">撑不到重置 · 预计 ${dur(eta)}后耗尽</span>
+    <span class="cap end">${endCap}</span></div>`;
+}
+
+/* ── 渲染 ───────────────────────────────────────────────── */
+function renderWindows(d){
+  const worst = d.pool_worst || {};
+  const multi = Object.keys(providers()).length > 1;
+  const sections = Object.entries(providers()).map(([pid, provider]) => {
+    const specs = (provider.windows || []).slice(0, RADII.length);
+    const cards = specs.length ? specs.map((spec, i) => {
+      const info = (worst[pid] || {})[spec.key];
+      const hue = hueOf(spec, i);
+      if (!info) return `<div class="win" style="--hue:${hue}"><div class="k"><i></i>${esc(spec.label)}</div>
+        <div class="v"><b>—</b></div><div class="meta">无数据</div><div class="bar"><i style="width:0"></i></div></div>`;
+      const used = info.percent ?? 0;
+      const acct = (d.accounts || []).find(a => a.name === info.account) || {};
+      const state = winState(acct, spec.key);
+      return `<div class="win ${used >= 85 ? "urgent":""}" style="--hue:${hue}">
+        <div class="k"><i></i>${esc(spec.label)}</div>
+        <div class="v"><b>${pct(used)}</b><span>% 已用</span></div>
+        <div class="meta">最紧 ${esc(info.account)} · ${when(state.resets_at)}重置</div>
+        <div class="bar"><i style="width:${Math.min(100,used).toFixed(1)}%"></i></div></div>`;
+    }).join("") : `<div class="win plain" style="--hue:var(--line2)"><div class="k"><i></i>无额度观测</div>
+        <div class="v"><b>按轮询调度</b></div>
+        <div class="meta">该上游不返回余量，调度退化为轮询 + 冷却</div></div>`;
+    return `<div class="eyebrow"><b>${esc(provider.display_name || pid)}</b>
+      <em>${esc(pid)}${
+        (provider.adapter && provider.adapter !== pid) ? " · " + esc(provider.adapter) : ""
+      }${provider.supports_quota ? "" : " · 无余量观测"}</em></div>
+      <section class="windows">${cards}</section>`;
+  }).join("");
+  $("#window-sections").innerHTML = sections || `<div class="skeleton">没有配置任何上游</div>`;
+}
+
+function render(d){
+  const multi = Object.keys(providers()).length > 1;
+  const hosts = Object.values(providers()).map(p => (p.base_url || "").replace(/^https?:\/\//, ""));
+  $("#upstream").textContent = hosts.join("  ·  ") || "—";
+  const healthy = d.healthy_accounts, total = d.total_accounts;
+  $("#livetext").textContent = `在线 ${healthy}/${total} · 近 5 分钟 ${d.requests_last_5m} 次请求`;
+  $("#livedot").className = "dot " + (healthy === 0 ? "bad" : healthy < total ? "warn" : "ok");
+
+  const st = d.sticky || {};
+  $("#sticky-note").textContent = (st.hits === undefined) ? "—"
+    : `会话粘性：钉住 ${st.pinned || 0} 个 · 命中 ${st.hits} / 未命中 ${st.misses}`
+      + `（TTL ${ttlText(st.ttl_seconds)}）`;
+
+  renderWindows(d);
+
+  const stamps = (d.accounts || []).map(a => a.last_refresh).filter(Boolean);
+  $("#stamp").textContent = stamps.length ? `最后刷新 ${clock(Math.max(...stamps))}` : "—";
+  $("#adapter-note").textContent = `已加载 ${Object.keys(providers()).length} 个上游`;
+
+  $("#acct-count").textContent = `${d.accounts.length} 个 · 按余量排序`;
+  const accts = [...d.accounts].sort((x, y) => {
+    const hx = x.headroom === null ? 1e9 : x.headroom;
+    const hy = y.headroom === null ? 1e9 : y.headroom;
+    return hy - hx;
+  });
+  $("#accounts").innerHTML = accts.map(a => {
+    const specs = windowsOf(a);
+    const cooling = a.cooldown_until && a.cooldown_until * 1000 > Date.now();
+    const blocked = a.blocked_window;
+    let state_;
+    if (!a.enabled) state_ = { cls: "mute", text: "已暂停" };
+    else if (cooling) state_ = { cls: "bad", text: "冷却中" };
+    else if (blocked) state_ = { cls: "bad", text: `${labelOf(blocked)}额度打满` };
+    else if (a.below_reserve) state_ = { cls: "warn", text: "余量保留中 · 不参与调度" };
+    else if (a.headroom === null) state_ = { cls: "mute", text: "无额度观测" };
+    else if (a.headroom < 15) state_ = { cls: "warn", text: "余量偏低" };
+    else state_ = { cls: "ok", text: "可用" };
+
+    const nums = specs.map((spec, i) =>
+      `<span class="${isDead(a, spec.key) ? "dead" : ""}">${esc(spec.label)} ${pct(winPct(a, spec.key))}%</span>`).join("");
+    const head = (a.headroom === null) ? "—" : Math.round(a.headroom);
+
+    return `<article class="acct ${(a.headroom !== null && a.headroom < 0) ? "dead":""} ${a.enabled?"":"off"}">
+      ${rings(a)}
+      <div class="main">
+        <div class="line">
+          <span class="name">${esc(a.name)}</span>
+          ${multi ? `<span class="prov">${esc(a.provider)}</span>` : ""}
+          <span class="pill ${state_.cls}">${state_.text}</span>
+          ${a.cooldown_reason && cooling ? `<span class="pill mute">${esc(reasonText(a.cooldown_reason))}</span>` : ""}
+          ${a.refresh_error ? `<span class="pill bad">${esc(a.refresh_error)}</span>` : ""}
+          ${keyPill(a)}
+        </div>
+        <div class="nums">${nums}<span>余量 <b>${head}</b></span></div>
+        ${life(a)}
+      </div>
+      <div class="side">
+        <div class="stats">
+          <div>累计请求<b>${a.requests}</b></div>
+          <div>累计错误<b>${a.errors}</b></div>
+          <div>额度消耗<b>${(a.allowance_used||0).toFixed(4)}</b></div>
+          <div>采样<b>${a.samples||0}</b></div>
+        </div>
+        <div class="row">
+          ${cooling ? `<button data-clear="1">清冷却</button>` : ``}
+          <button data-toggle="${esc(a.name)}" data-enabled="${a.enabled?1:0}">${a.enabled ? "暂停" : "恢复"}</button>
+        </div>
+        <div class="row">
+          <button data-rotate="${esc(a.name)}" ${(a.key && a.key.editable === false) ? "disabled title=\"密钥来自环境变量，面板改不动\"" : ""}>换 key</button>
+          <button class="danger" data-remove="${esc(a.name)}">移除</button>
+        </div>
+      </div>
+    </article>`;
+  }).join("") || `<div class="skeleton">池子里没有账号</div>`;
+}
+
+/* ── 数据 ───────────────────────────────────────────────── */
+async function fetchSchema(){
+  try{
+    const r = await fetch(API_BASE + "/v1/pool/schema", {headers: TOKEN ? {Authorization:`Bearer ${TOKEN}`} : {}});
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const schema = await r.json();
+    const issues = [...(schema.warnings || []), ...(schema.adapter_load_errors || [])];
+    if (issues.length){
+      $("#banner").style.display = "block";
+      $("#banner").textContent = issues.join("\n");
+    }
+    return schema;
+  }catch(e){
+    $("#banner").style.display = "block";
+    $("#banner").textContent = `读取池配置失败：${e.message}`;
+    return { adapters: [], providers: {} };
+  }
+}
+
+async function load(){
+  try{
+    const r = await fetch(API_BASE + "/v1/usage", {headers: TOKEN ? {Authorization:`Bearer ${TOKEN}`} : {}});
+    if (r.status === 401){
+      $("#banner").style.display = "block";
+      $("#banner").textContent = "中转要求 token，但页面没拿到。请从 http://127.0.0.1:8790/ 打开本页。";
+      return;
+    }
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    render(await r.json());
+  }catch(e){
+    $("#livetext").textContent = `读取失败：${e.message}`;
+    $("#livedot").className = "dot bad";
+  }
+}
+
+async function post(path, body){
+  const r = await fetch(API_BASE + path, {
+    method: "POST",
+    headers: Object.assign({"Content-Type":"application/json"}, TOKEN ? {Authorization:`Bearer ${TOKEN}`} : {}),
+    body: JSON.stringify(body || {}),
+  });
+  let payload = null;
+  try { payload = await r.json(); } catch(e) {}
+  if (!r.ok){ toast(payload && payload.error ? `失败：${payload.error}` : `失败 HTTP ${r.status}`); return null; }
+  return payload;
+}
+
+async function postFull(path, body){
+  try{
+    const r = await fetch(API_BASE + path, {
+      method: "POST",
+      headers: Object.assign({"Content-Type":"application/json"}, TOKEN ? {Authorization:`Bearer ${TOKEN}`} : {}),
+      body: JSON.stringify(body || {}),
+    });
+    let data = null;
+    try { data = await r.json(); } catch(e) {}
+    return { ok: r.ok, status: r.status, data };
+  }catch(e){
+    return { ok: false, status: 0, data: { error: e.message } };
+  }
+}
+
+/* ── 账号增删改（对话框）─────────────────────────────────── */
+const dlg = $("#dlg");
+let dlgMode = "add", dlgTarget = null;
+
+function fillProviders(){
+  $("#f-provider").innerHTML = Object.entries(providers()).map(([pid, p]) =>
+    `<option value="${esc(pid)}">${esc(p.display_name || pid)} · ${esc(pid)}</option>`).join("");
+}
+
+function openAdd(){
+  dlgMode = "add"; dlgTarget = null;
+  $("#dlg-title").textContent = "添加账号";
+  $("#dlg-sub").textContent = "密钥写入 ~/.dsh/opencode-pool/secrets.json（0600），不会回显";
+  $("#f-name").value = ""; $("#f-name").disabled = false;
+  $("#f-key").value = ""; $("#f-slot").value = "";
+  $("#row-provider").style.display = ""; $("#row-slot").style.display = "";
+  $("#dlg-error").style.display = "none";
+  fillProviders();
+  dlg.showModal();
+  $("#f-name").focus();
+}
+
+function openRotate(name){
+  dlgMode = "rotate"; dlgTarget = name;
+  $("#dlg-title").textContent = `换 key · ${name}`;
+  $("#dlg-sub").textContent = "只换密钥；保存后清掉该号冷却并立刻重查额度";
+  $("#f-name").value = name; $("#f-name").disabled = true;
+  $("#f-key").value = ""; $("#f-slot").value = "";
+  $("#row-provider").style.display = "none"; $("#row-slot").style.display = "none";
+  $("#dlg-error").style.display = "none";
+  dlg.showModal();
+  $("#f-key").focus();
+}
+
+function dlgError(msg){
+  const el = $("#dlg-error");
+  el.textContent = msg;
+  el.style.display = msg ? "block" : "none";
+}
+
+async function submitDlg(e){
+  e.preventDefault();
+  const key = $("#f-key").value.trim();
+  if (!key) return dlgError("密钥不能为空");
+  const okBtn = $("#dlg-ok");
+  okBtn.disabled = true; okBtn.textContent = "保存中…";
+  dlgError("");
+
+  const res = dlgMode === "add"
+    ? await postFull("/v1/pool/accounts", {
+        name: $("#f-name").value.trim(),
+        provider: $("#f-provider").value,
+        key,
+        key_env: $("#f-slot").value.trim() || undefined,
+      })
+    : await postFull("/v1/pool/account/key", { name: dlgTarget, key });
+
+  okBtn.disabled = false; okBtn.textContent = "保存";
+  if (!res.ok){
+    const msg = (res.data && (res.data.error || (res.data.problems || []).join("\n"))) || `HTTP ${res.status}`;
+    return dlgError(msg);
+  }
+  dlg.close();
+  if (res.data && res.data.snapshot) render(res.data.snapshot); else load();
+  toast(dlgMode === "add" ? `已添加 ${$("#f-name").value.trim()}` : `已换 key · ${dlgTarget}`);
+}
+
+$("#dlg-form").addEventListener("submit", submitDlg);
+$("#dlg-cancel").addEventListener("click", () => dlg.close());
+
+/* ── 事件 ───────────────────────────────────────────────── */
+document.addEventListener("click", async e => {
+  const btn = e.target.closest("button");
+  if (!btn) return;
+
+  if (btn.id === "btn-refresh"){
+    btn.disabled = true; btn.textContent = "刷新中…";
+    const d = await post("/v1/pool/refresh");
+    btn.disabled = false; btn.textContent = "立即刷新";
+    if (d) { render(d); toast("已向上游重新查询额度"); }
+    return;
+  }
+  if (btn.id === "btn-clear"){
+    const d = await post("/v1/pool/clear-cooldowns");
+    if (d){ toast(`清掉 ${d.cleared.length} 个冷却`); load(); }
+    return;
+  }
+  if (btn.id === "btn-reload"){
+    btn.disabled = true;
+    const d = await post("/v1/pool/reload");
+    btn.disabled = false;
+    if (d){
+      SCHEMA = await fetchSchema();
+      await load();
+      toast(`已重载配置（${d.accounts.length} 个账号）`);
+    }
+    return;
+  }
+  if (btn.id === "btn-add"){ openAdd(); return; }
+  if (btn.dataset.rotate){ openRotate(btn.dataset.rotate); return; }
+  if (btn.dataset.remove){
+    const name = btn.dataset.remove;
+    if (!confirm(`移除账号 ${name}？\n\n配置会先备份；密钥槽位没有别的账号在用时会一起删掉。`)) return;
+    btn.disabled = true;
+    const res = await postFull("/v1/pool/account/remove", { name });
+    btn.disabled = false;
+    if (!res.ok){
+      toast((res.data && res.data.error) || `移除失败 HTTP ${res.status}`);
+      return;
+    }
+    if (res.data.snapshot) render(res.data.snapshot); else load();
+    toast(`已移除 ${name}` + (res.data.secret_dropped ? "（并回收密钥）" : ""));
+    return;
+  }
+  if (btn.dataset.toggle){
+    const on = btn.dataset.enabled === "1";
+    const d = await post("/v1/pool/account", {name: btn.dataset.toggle, enabled: !on});
+    if (d){ render(d); toast(on ? `已暂停 ${btn.dataset.toggle}` : `已恢复 ${btn.dataset.toggle}`); }
+    return;
+  }
+  if (btn.dataset.clear){
+    const d = await post("/v1/pool/clear-cooldowns");
+    if (d){ toast("已清冷却"); load(); }
+  }
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden){ clearInterval(timer); timer = null; }
+  else if (!timer){ load(); timer = setInterval(load, 5000); }
+});
+
+(async function boot(){
+  SCHEMA = await fetchSchema();
+  await load();
+  timer = setInterval(load, 5000);
+  // #add 是深链：直接弹出添加账号（方便把链接丢给自己 / 手机上点一下就能加号）
+  if (location.hash === "#add") openAdd();
+})();
+</script>
+</body>
+</html>

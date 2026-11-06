@@ -1,0 +1,19 @@
+services:
+  opencode-pool:
+    build: .
+    image: opencode-pool:0.2.0
+    container_name: opencode-pool
+    restart: unless-stopped
+    ports:
+      # 只绑宿主 loopback —— 面板与中转都不该裸露公网（见 SECURITY.md）
+      - "127.0.0.1:8790:8790"
+    volumes:
+      # 宿主配置目录 → 容器 /data；里面有 pool.config.json（可含 secrets_file/state_file）
+      - ~/.dsh/opencode-pool:/data
+    environment:
+      OPENCODE_POOL_CONFIG: /data/pool.config.json
+    # 挂载目录属主与容器内 uid 不一致时（容器用户 uid=1000），
+    # 服务写不进 secrets/state。两个办法二选一：
+    #   ① 宿主执行 chown -R 1000:1000 ~/.dsh/opencode-pool
+    #   ② 打开下面这行，用宿主当前 uid 跑（Linux；macOS Docker Desktop 不需要）
+    # user: "${UID:-1000}:${GID:-1000}"

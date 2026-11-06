@@ -1,0 +1,32 @@
+# opencode-pool 中转的 systemd unit
+#
+# 安装（路径按你的实际安装位置改，见 deploy/README.md）：
+#   sudo cp deploy/opencode-pool.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now opencode-pool
+[Unit]
+Description=OpenCode Pool relay (opencode-pool 号池中转)
+Documentation=file:///opt/opencode-pool/README.md
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=agent
+Group=agent
+# 仓库检出位置（python3 -m opencode_pool 要能 import 到包；pip install 过可删掉这行）
+WorkingDirectory=/opt/opencode-pool
+# 配置位置：也可以用 CLI `serve --config /path` 显式指定，两者等价
+Environment=OPENCODE_POOL_CONFIG=/home/agent/.dsh/opencode-pool/pool.config.json
+ExecStart=/usr/bin/python3 -m opencode_pool serve
+Restart=always
+RestartSec=3
+# 密钥仓 / 状态文件只属于服务用户
+UMask=0077
+# 兜底：别把密钥打进 journal（正常日志本来就不含密钥）
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=opencode-pool
+
+[Install]
+WantedBy=multi-user.target
