@@ -6,7 +6,7 @@
   pool      与上游无关的调度：挑号、冷却、记账、持久化
   server    HTTP：OpenAI 兼容入口 + 管理 API + 控制台
 """
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 from .adapters import Adapter, Adapter as BaseAdapter  # noqa: F401  (re-export for extensions)
 from .config import Config, Provider  # noqa: F401

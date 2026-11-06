@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-opencode-pool",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "OpenCode 号池：把多个 OpenCode Go 订阅账号合成一个 OpenAI 兼容入口，在 DSH 里管理账号、额度与轮换",
   "type": "module",
   "license": "MIT",
