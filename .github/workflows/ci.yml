@@ -40,7 +40,7 @@ jobs:
           cache-dependency-path: pyproject.toml
 
       - name: 语法检查（compileall，不联网）
-        run: python3 -m compileall -q opencode_pool tests scripts
+        run: python3 -m compileall -q opencode_pool tests scripts winclient
 
       # 测试本身不联网、不起真实上游（端到端用例起本地 FakeUpstream）；
       # 运行时依赖只有 requests。
@@ -48,7 +48,7 @@ jobs:
         run: python3 -m pip install --quiet requests ruff
 
       - name: 静态检查（ruff：未定义名 / 未用导入 / 语法级规则）
-        run: python3 -m ruff check opencode_pool tests scripts
+        run: python3 -m ruff check opencode_pool tests scripts winclient
 
       - name: Python 回归（unittest）
         run: python3 -m unittest discover -s tests
