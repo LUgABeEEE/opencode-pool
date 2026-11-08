@@ -18,6 +18,7 @@ import struct
 import subprocess
 import sys
 import tempfile
+from datetime import datetime, timedelta, timezone
 import threading
 import time
 import unittest
@@ -25,7 +26,17 @@ from unittest import mock
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-HERE = ROOT
+HERE = ROOTHERE = ROOT
+
+
+def _ts_ago(*, hours=0.0):
+    """夹具用的**相对**时间戳。
+
+    stats.py 的 --since 是按「现在」算的；夹具里写死日期，写完 24 小时之后整批行就会
+    被 --since 24h 筛掉，测试变成定时炸弹（2026-11-08 就是这么挂的）。
+    """
+    moment = datetime.now(timezone.utc) - timedelta(hours=hours)
+    return moment.isoformat(timespec="milliseconds")
 sys.path.insert(0, ROOT)
 
 from opencode_pool import adapters  # noqa: E402
@@ -2339,13 +2350,13 @@ class StatsClientErrorTest(unittest.TestCase):
         self.addCleanup(lambda: shutil.rmtree(tmp, ignore_errors=True))
         path = os.path.join(tmp, "requests.jsonl")
         rows = [
-            {"ts": "2026-11-06T12:00:00.000+08:00", "req_id": "11111111", "status": 200,
+            {"ts": _ts_ago(hours=5), "req_id": "11111111", "status": 200,
              "outcome": "ok", "account": "go02", "ttfb_ms": 100.0, "total_ms": 100.0,
              "sticky": "hit", "failovers": 0, "tokens": {"input": 1, "cache_read": 9}},
-            {"ts": "2026-11-06T12:01:00.000+08:00", "req_id": "22222222", "status": 200,
+            {"ts": _ts_ago(hours=4), "req_id": "22222222", "status": 200,
              "outcome": "ok", "account": "go02", "ttfb_ms": 100.0, "total_ms": 100.0,
              "sticky": "miss", "failovers": 0, "tokens": {"input": 1, "cache_read": 9}},
-            {"ts": "2026-11-06T12:02:00.000+08:00", "req_id": "33333333", "status": 499,
+            {"ts": _ts_ago(hours=3), "req_id": "33333333", "status": 499,
              "outcome": "client_error", "error_reason": "client_abort", "account": "go02",
              "ttfb_ms": 10.0, "total_ms": 20.0, "bytes": 0, "sticky": "hit",
              "failovers": 0, "tokens": {"input": None, "cache_read": None}},
@@ -2371,17 +2382,17 @@ class StatsScriptTest(unittest.TestCase):
         self.addCleanup(lambda: shutil.rmtree(tmp, ignore_errors=True))
         path = os.path.join(tmp, "requests.jsonl")
         rows = [
-            {"ts": "2026-11-06T12:00:00.000+08:00", "req_id": "aaaaaaaa", "status": 200,
+            {"ts": _ts_ago(hours=5), "req_id": "aaaaaaaa", "status": 200,
              "outcome": "ok", "account": "go02", "ttfb_ms": 100.0, "total_ms": 200.0,
              "sticky": "hit", "failovers": 0, "tokens": {"input": 10, "cache_read": 90}},
-            {"ts": "2026-11-06T12:01:00.000+08:00", "req_id": "bbbbbbbb", "status": 200,
+            {"ts": _ts_ago(hours=4), "req_id": "bbbbbbbb", "status": 200,
              "outcome": "ok", "account": "go02", "ttfb_ms": 300.0, "total_ms": 400.0,
              "sticky": "hit", "failovers": 0, "tokens": {"input": 0, "cache_read": 100}},
-            {"ts": "2026-11-06T12:02:00.000+08:00", "req_id": "cccccccc", "status": 503,
+            {"ts": _ts_ago(hours=3), "req_id": "cccccccc", "status": 503,
              "outcome": "throttled", "account": "go01", "ttfb_ms": 50.0, "total_ms": 50.0,
              "sticky": "miss", "failovers": 1, "error_reason": "throttled-persistent",
              "tokens": {"input": None, "cache_read": None}},
-            {"ts": "2026-11-06T12:03:00.000+08:00", "req_id": "dddddddd", "status": 503,
+            {"ts": _ts_ago(hours=2), "req_id": "dddddddd", "status": 503,
              "outcome": "no_account", "account": None, "ttfb_ms": 10.0, "total_ms": 10.0,
              "sticky": "off", "failovers": 0, "tokens": {}},
             {"ts": "2020-01-01T00:00:00.000+08:00", "req_id": "eeeeeeee", "status": 200,
