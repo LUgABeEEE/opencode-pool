@@ -75,7 +75,7 @@ dsh plugin add /path/to/opencode-pool/dsh-plugin
 | --- | --- | --- |
 | 🎯 | 余量感知选号 | `headroom = min(100 − 各窗口 percent)`，贴死线的号不接单（`min_headroom` 水位线） |
 | 🔁 | 失败自动处置 | 429 按**窗口**冷到重置、瞬时限流**同号指数退避重试**、401 冷 30 分钟、5xx 短冷却、4xx 原样透传 |
-| ⚙️ | 并发与速率保护 | 每号并发位（`max_inflight`）+ 最小间隔（`min_interval_seconds`）；全池限流时先排队（`queue_wait_seconds`）再 503 |
+| ⚙️ | 并发与速率保护 | 每号并发位（`max_inflight`）+ 最小间隔（`min_interval_seconds`）；候选都在排队时按一个全局预算（`queue_wait_seconds`）等位，期限才 503；退避不占并发位 |
 | 📌 | 会话粘性 | 同一对话钉在同一账号，保住 prompt cache；TTL 默认 12 小时（只是安全上界，超容量按 LRU 淘汰）；失败换号自动解钉 |
 | 📊 | 三档额度观测 | `/v1/usage` 轮询 5h / 周 / 月窗口，速率与耗尽时间推算 |
 | 🖥 | 控制台 | 窗口卡 / 三环仪表 / 寿命带 / 加号·换 key·删号·暂停 / 热重载配置 |
