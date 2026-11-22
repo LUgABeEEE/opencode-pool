@@ -2581,3 +2581,43 @@ class ClientAbortWriteTest(unittest.TestCase):
         self.assertEqual(row["error_reason"], "client_abort")
         self.assertEqual(row["bytes"], 0)
         self.assert_summary_once(output.getvalue(), "/v1/chat/completions")
+
+
+# ── 远程面板：默认只给 loopback，显式开启后必须带对 token ──────────────
+class RemotePanelAuthTest(unittest.TestCase):
+    """一台跑中转、另一台用 DSH 面板的部署：远程面板是 opt-in + token。"""
+
+    def handler(self, addr: str, token: str = "t0k", allow: bool = False,
+                auth: str | None = None):
+        from opencode_pool.server import RelayHandler
+
+        cfg = make_config([account("a", "K_RP")])
+        cfg.relay_token = token
+        cfg.allow_remote_panel = allow
+        pool = Pool(cfg, keys=FakeKeyStore({"K_RP": "k"}))
+        handler = RelayHandler.__new__(RelayHandler)
+        handler.pool = pool
+        handler.client_address = (addr, 45678)
+        handler.headers = {"Authorization": auth} if auth else {}
+        return handler
+
+    def test_loopback_always_allowed(self):
+        self.assertTrue(self.handler("127.0.0.1")._panel_authorized())
+        self.assertTrue(self.handler("::1")._panel_authorized())
+
+    def test_remote_refused_by_default_even_with_token(self):
+        self.assertFalse(
+            self.handler("192.168.1.105", auth="Bearer t0k")._panel_authorized(),
+            "没显式开 allow_remote_panel 时，带对 token 也不能开面板")
+
+    def test_remote_allowed_with_flag_and_token(self):
+        self.assertTrue(
+            self.handler("192.168.1.105", allow=True, auth="Bearer t0k")._panel_authorized())
+
+    def test_remote_wrong_token_refused(self):
+        self.assertFalse(self.handler("192.168.1.105", allow=True, auth="Bearer nope")._panel_authorized())
+        self.assertFalse(self.handler("192.168.1.105", allow=True)._panel_authorized())
+
+    def test_remote_refused_when_no_token_configured(self):
+        """空 relay_token + 放开远程 = 谁都能进管理台；必须拒绝。"""
+        self.assertFalse(self.handler("192.168.1.105", token="", allow=True)._panel_authorized())

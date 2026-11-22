@@ -64,8 +64,12 @@ python3 -m opencode_pool check           # 改完配置先校验
 DSH 用户装插件（侧边栏面板、局域网可用、token 服务端注入）：
 
 ```bash
+# 注意装的是 dsh-plugin 子目录，不是仓库根：dsh.bundle 只声明在子目录的 package.json 里
 dsh plugin add /path/to/opencode-pool/dsh-plugin
 ```
+
+装错成仓库根时，插件页会显示「这个包没有声明组合包」——判据与修法见
+[docs/troubleshooting.md](docs/troubleshooting.md#插件页显示这个包没有声明组合包装错目录)。
 
 更多：**[docs/quickstart.md](docs/quickstart.md)**（5 分钟完整跑通）。
 

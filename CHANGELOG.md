@@ -1,5 +1,19 @@
 # 变更记录
 
+## 0.2.2
+
+一台机器跑中转、另一台用 DSH 面板的部署（远程面板）。
+
+- 加：`allow_remote_panel`（默认 `false`）。面板能加号、换 key、删号，等同管理台，所以
+  远程访问是**显式 opt-in**：开启后，非 loopback 客户端仍必须带对 `relay_token`
+  （DSH 插件在宿主侧注入 Bearer）；`relay_token` 为空时**一律拒绝**（否则等于把管理台
+  挂到内网上）。
+- 修：面板的 403 判据从「硬编码 client_address 白名单」改成 `_panel_authorized()`，
+  与 `/metrics` 的鉴权口径一致，便于后续加来源限制
+- 测试：新增 5 条（loopback 恒可、默认拒绝远程、开启+对 token 放行、错 token 拒、空 token 拒）
+- 文档：`docs/configuration.md` 增字段说明；`SECURITY.md` 的「面板仅 loopback」改写为默认仅 loopback；
+  `docs/troubleshooting.md` 增「插件页显示没有声明组合包（装错目录）」一节
+
 ## 0.2.1
 
 过载下的排队与容量修正。触发场景：2026-11-11 上午峰值 14 并发、可用号只剩 2～3 个时，

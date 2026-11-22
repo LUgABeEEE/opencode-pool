@@ -180,6 +180,23 @@ class RelayHandler(BaseHTTPRequestHandler):
             return True
         return self._authorized()
 
+    def _panel_authorized(self) -> bool:
+        """面板能不能看：本机随便看，远程要显式开启 + 带对 token。
+
+        默认仍然只给 loopback：面板能加号、换 key、删号，等于池子的管理台。
+        但在「一台机器跑中转、另一台机器用 DSH 面板」的部署里，远程那台是经
+        DSH 插件代理过来的（插件会在宿主侧注入 Bearer），所以只要有 token 就是
+        可信通道 —— 前提是**显式**打开 `allow_remote_panel`，不默认放开。
+        """
+        if self._loopback():
+            return True
+        if not bool(getattr(self.pool.cfg, "allow_remote_panel", False)):
+            return False
+        if not (self.pool.cfg.relay_token or ""):
+            # 没 token 的远程面板 = 谁都能打开管理台加号/换 key，绝不能放开
+            return False
+        return self._authorized()
+
     def _read_body(self) -> bytes:
         size = int(self.headers.get("Content-Length") or 0)
         return self.rfile.read(size) if size else b""
@@ -423,7 +440,7 @@ class RelayHandler(BaseHTTPRequestHandler):
 
     # ── 控制台 ─────────────────────────────────────────────
     def _serve_panel(self) -> None:
-        if self.client_address[0] not in ("127.0.0.1", "::1", "::ffff:127.0.0.1"):
+        if not self._panel_authorized():
             return self._json(403, {"error": "panel is loopback-only"})
         page = PANEL_PATH
         try:

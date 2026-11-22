@@ -74,6 +74,10 @@ class Config:
     # 全池都在瞬时限流冷却时，最多陪客户端等多久（秒）再回 503。
     # 只有一个号时，这个等待决定了"排队"还是"直接失败"。
     queue_wait_seconds: float = 60.0
+    # 面板是否允许远程（非 loopback）访问。默认 False：面板能加号/换 key/删号，
+    # 等于管理台。一台机器跑中转、另一台用 DSH 面板的部署里显式打开 —— 远程仍必须
+    # 带对 relay_token（DSH 插件会在宿主侧注入），空 token 时一律拒绝。
+    allow_remote_panel: bool = False
     usage_refresh_seconds: int = 90
     # 会话粘性：同一对话（指纹 = model + system + 首条 user）在 TTL 内钉在同一个账号上，
     # 保住上游 prompt cache。0 = 关闭粘性（每轮独立选号）。
@@ -129,6 +133,8 @@ class Config:
             cfg.max_inflight = int(raw["max_inflight"])
         if raw.get("min_headroom") is not None:
             cfg.min_headroom = float(raw["min_headroom"])
+        if raw.get("allow_remote_panel") is not None:
+            cfg.allow_remote_panel = bool(raw["allow_remote_panel"])
         if raw.get("usage_refresh_seconds"):
             cfg.usage_refresh_seconds = int(raw["usage_refresh_seconds"])
         if raw.get("sticky_ttl_seconds") is not None:
@@ -213,6 +219,7 @@ class Config:
             "max_inflight": self.max_inflight,
             "min_interval_seconds": self.min_interval_seconds,
             "queue_wait_seconds": self.queue_wait_seconds,
+            "allow_remote_panel": self.allow_remote_panel,
             "upstream_timeout": self.upstream_timeout,
             "sticky_ttl_seconds": self.sticky_ttl_seconds,
             "request_log_path": self.request_log_path,
@@ -243,6 +250,7 @@ class Config:
             "max_inflight": self.max_inflight,
             "min_interval_seconds": self.min_interval_seconds,
             "queue_wait_seconds": self.queue_wait_seconds,
+            "allow_remote_panel": self.allow_remote_panel,
             "sticky_ttl_seconds": self.sticky_ttl_seconds,
             "request_log_path": self.request_log_path,
             "request_log_max_bytes": self.request_log_max_bytes,
