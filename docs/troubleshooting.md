@@ -11,6 +11,7 @@
 | 调接口 503 `NoAvailableAccount` | 全部账号冷却 / 额度耗尽 / 低于水位线 | [号池 503](#号池-503noavailableaccount) |
 | 调接口 401 `bad relay token` | 客户端没带 / 带错 `relay_token` | [鉴权 401](#鉴权-401) |
 | DSH 整页 boot 卡在 `Failed to load plugins` | 插件客户端模块 id 写错 | [DSH boot](#dsh-boot-卡住import-failed) |
+| 插件页「没有声明组合包」/ 插件一直「未运行」 | 把仓库根当插件装了（应该装 `dsh-plugin/` 子目录） | [装错目录](#插件页显示这个包没有声明组合包装错目录) |
 | CLI 报 `unrecognized arguments` | 旧版 `--config` 位置问题（0.1.1 已修） | [CLI --config](#cli---config-位置) |
 | 不知道日志在说什么 | `[req]` / `[pool]` 行格式 | [读日志](#req-与-pool-日志怎么读) |
 | Prometheus 抓不到 / 看不懂指标 | `/metrics` 指标含义 | [指标含义](#metrics-指标含义) |
@@ -58,12 +59,14 @@
      `throttled-persistent`（限流持续，冷 15s）；
 2. 面板看「余量保留中 · 不参与调度」——余量低于 `min_headroom`（默认 2.0）的号
    会被主动跳过，这是特性不是故障；想让它接单就调低水位线；
-3. 看到 503 前先留意**排队**：全池瞬时限流时请求会先等 `queue_wait_seconds`
-   （默认 60 秒，日志见 `全池冷却中，排队等待`）才回 503 —— 等待中不算失败，
-   嫌等太久就调小这个值；
-3. 真全死了：面板「清冷却」（`POST /v1/pool/clear-cooldowns`）手动放出来试试，
+3. 看到 503 前先留意**排队**：候选号都在冷却、或并发位 / 最小间隔没空时，请求会一直
+   等到 `queue_wait_seconds`（默认 60 秒，**整个请求一个期限**，日志见
+   `全池冷却/排队中，等待`）才回 503 —— 等待中不算失败。容量不够的典型形状是
+   `queue_ms ≈ 60s` 且成片 503：那是并发位（`max_inflight`，默认每号 1）被长回答
+   占满，调大它或加号，别去调 `queue_wait_seconds`；
+4. 真全死了：面板「清冷却」（`POST /v1/pool/clear-cooldowns`）手动放出来试试，
    或换 key（`POST /v1/pool/account/key`）；
-4. 只有一个号还打了满额度：等窗口重置（面板的窗口卡有倒计时），或加号。
+5. 只有一个号还打了满额度：等窗口重置（面板的窗口卡有倒计时），或加号。
 
 ## 鉴权 401
 
@@ -84,6 +87,47 @@
 
 防回归断言在 `tests/plugin.test.mjs`（"模块 id 必须是 npm 包名"），
 改插件前先跑 `node --test tests/plugin.test.mjs`。
+
+## 插件页显示「这个包没有声明组合包」（装错目录）
+
+插件管理器那句是 `reasonNotBundle`。本仓库是 **Python 包（仓库根）+ DSH 插件（`dsh-plugin/` 子目录）**
+的布局：`dsh.bundle` 只声明在 `dsh-plugin/package.json` 里，**仓库根没有 `package.json`**。
+所以把**仓库根**装成插件，就会命中这条：
+
+```
+dsh plugin add github:LUgABeEEE/opencode-pool     # ❌ 装的是仓库根
+```
+
+pnpm 对这种没有 `package.json` 的 git 包会生成一个 108 字节的占位文件
+`{"_pnpmPlaceholder":"..."}`：没有 `name`、没有 `version`、当然也没有 `dsh.bundle`。
+插件页于是显示「未运行」+「这个包没有声明组合包，不能作为插件管理」，profile 的
+`node_modules/opencode-pool/` 里只有一份源码快照，`dsh-plugin/package.json`（真正的 manifest，
+`dsh-plugin-opencode-pool`）躺在它的下一层，DSH 看不到。
+
+正确装法是把**子目录**当包名装：
+
+```bash
+# 本地克隆后（本机验证过的写法）
+dsh plugin add /path/to/opencode-pool/dsh-plugin
+
+# 直接吃 GitHub（pnpm 的 git 子目录写法，需要 pnpm 支持 #path:）
+dsh plugin add dsh-plugin-opencode-pool@github:LUgABeEEE/opencode-pool#path:/dsh-plugin
+```
+
+装对之后，profile 的 `dependencies` 里包名是 **`dsh-plugin-opencode-pool`**，
+`dsh.profile.bundles` 里也必须是这个名字；如果那里写的是 `opencode-pool`，就是装错了。
+
+排查三步：
+
+1. `node -e "console.log(require('<profile>/node_modules/<包名>/package.json'))"` ——
+   看到 `_pnpmPlaceholder` 或没有 `dsh` 字段 = 装错目录；
+2. 包名对不对：`dsh-plugin-opencode-pool` ✅ / `opencode-pool` ❌；
+3. 卸载错的：`dsh plugin --profile <name> remove opencode-pool`，再从 `dsh.profile.bundles`
+   里删掉那一行，然后按上面正确装法重装。
+
+顺带一句：插件只是面板与宿主代理，**中转本体（Python）要另跑**。装插件的那台机器上
+`python3 -m opencode_pool serve` 起不来（比如 Windows 上没装 Python），面板同样会是 502
+或「未运行」—— 这跟组合包声明无关，先看 [面板 502](#面板-502dsh-插件入口)。
 
 ## CLI --config 位置
 

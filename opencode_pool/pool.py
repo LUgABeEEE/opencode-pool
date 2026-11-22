@@ -38,7 +38,10 @@ def _human(seconds: float) -> str:
         return f"{seconds / 86400:.1f} 天"
     if seconds >= 3600:
         return f"{seconds / 3600:.1f} 小时"
-    return f"{seconds / 60:.0f} 分钟"
+    if seconds >= 60:
+        return f"{seconds / 60:.0f} 分钟"
+    # 15s 的限流冷却曾经被印成「冷却 0 分钟」——日志里看不出到底冷多久
+    return f"{seconds:.0f} 秒"
 
 
 # ── 凭据 ────────────────────────────────────────────────────────────────

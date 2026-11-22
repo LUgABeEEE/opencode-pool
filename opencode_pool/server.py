@@ -7,6 +7,8 @@ from __future__ import annotations
 import json
 import os
 import re
+import select
+import socket
 import sys
 import time
 import shutil
@@ -176,6 +178,23 @@ class RelayHandler(BaseHTTPRequestHandler):
         """
         if self._loopback():
             return True
+        return self._authorized()
+
+    def _panel_authorized(self) -> bool:
+        """面板能不能看：本机随便看，远程要显式开启 + 带对 token。
+
+        默认仍然只给 loopback：面板能加号、换 key、删号，等于池子的管理台。
+        但在「一台机器跑中转、另一台机器用 DSH 面板」的部署里，远程那台是经
+        DSH 插件代理过来的（插件会在宿主侧注入 Bearer），所以只要有 token 就是
+        可信通道 —— 前提是**显式**打开 `allow_remote_panel`，不默认放开。
+        """
+        if self._loopback():
+            return True
+        if not bool(getattr(self.pool.cfg, "allow_remote_panel", False)):
+            return False
+        if not (self.pool.cfg.relay_token or ""):
+            # 没 token 的远程面板 = 谁都能打开管理台加号/换 key，绝不能放开
+            return False
         return self._authorized()
 
     def _read_body(self) -> bytes:
@@ -421,7 +440,7 @@ class RelayHandler(BaseHTTPRequestHandler):
 
     # ── 控制台 ─────────────────────────────────────────────
     def _serve_panel(self) -> None:
-        if self.client_address[0] not in ("127.0.0.1", "::1", "::ffff:127.0.0.1"):
+        if not self._panel_authorized():
             return self._json(403, {"error": "panel is loopback-only"})
         page = PANEL_PATH
         try:
@@ -479,15 +498,53 @@ class RelayHandler(BaseHTTPRequestHandler):
         self.pool.record_request(record)
         self._request_record = None
 
+    def _client_gone(self) -> bool:
+        """客户端连接是否已经断了（只 peek，不消费数据）。
+
+        排队期间客户端（DSH / curl）常常等不下去先走人。以前我们不知道，照样陪
+        它排满预算、拿到并发位还去上游发一次请求 —— 白占坑位、白烧额度，越是
+        过载越是雪上加霜。这里在"发上游之前"探一下：对端关闭 = 立刻收手。
+        """
+        try:
+            sock = getattr(self, "connection", None)
+            if sock is None:            # 单测里手工构造的 handler 没有 socket
+                return False
+            ready, _, _ = select.select([sock], [], [], 0)
+            if not ready:
+                return False
+            return sock.recv(1, socket.MSG_PEEK) == b""
+        except (OSError, ValueError):
+            return True
+
+    @staticmethod
+    def _slot_timeout(deadline: float, cap: float = 1.0) -> float:
+        """单次等位的上限：不超过排队期限，也不超过 cap。
+
+        cap 很短是有意的 —— 主循环每秒醒一次，才能发现客户端已经走了、
+        也才能在别的号空出来时立刻改道，而不是死等某一个号 30s。
+        """
+        return max(0.0, min(cap, deadline - time.time()))
+
     def _run_proxy(self, method, path, body, stream, model, record) -> None:
         started_at = record["_started"]
         inbound = {k.lower(): v for k, v in self.headers.items()}
+        # tried = 真的打过上游并失败（或按失败处置）的号：这些不再回头试。
+        # 本地闸门（并发位 / 最小间隔）没空不算失败 —— 那是"稍等"，不是"这号坏了"。
         tried: set[str] = set()
         attempts: dict[str, int] = {}
+        net_attempts: dict[str, int] = {}
         retry_budget = 3          # 同一账号因瞬时限流最多重试几次
         detail = ""
         account = None
         waiting_since = None
+        # 排队预算：整个请求一个期限（从进入本方法算起）。
+        # 旧实现是"每个号各等 30s"，三个号 = 90s 串行等待；客户端 60s 就走了，
+        # 我们还在替一个已经关掉的连接排队。
+        budget = max(0.0, float(getattr(self.pool.cfg, "queue_wait_seconds", 0) or 0))
+        deadline = started_at + budget
+        busy_until: dict[str, float] = {}   # 号 → 本请求内短暂跳过它的时刻（本地闸门忙）
+        capacity_waits = 0
+        busy_noted = False
         # 对话指纹：把同一对话钉在同一账号上，保住上游 prompt cache。
         # 失败换号后清空本轮的 key —— 让"下一轮"重新分布，而不是把应急换到的号钉死。
         sticky_key = self.pool.conversation_key(model, body)
@@ -514,27 +571,44 @@ class RelayHandler(BaseHTTPRequestHandler):
                   flush=True)
 
         while True:
+            now = time.time()
             if account is None:
+                # 短暂忙的号也跳过，但只是"这一两秒"—— busy_until 一过它又回到候选里
+                skip = set(tried) | {name for name, until in busy_until.items() if until > now}
                 trace: dict = {}
-                account = self.pool.pick(model, tried, sticky_key=sticky_key, trace=trace)
+                account = self.pool.pick(model, skip, sticky_key=sticky_key, trace=trace)
                 if account is None:
-                    # 一个都没试过 = 全池在冷却；陪客户端等窗口滑走，别立刻 503
-                    if tried:
+                    # 再问一次"有没有能用的号"（这次不计本地排队）：用来把
+                    # "全池冷却 / 额度打满 / 都试过了" 和 "号都只是被并发位占着"
+                    # 分开 —— 前者该收口，后者该继续等，报错原因也不一样。
+                    available = self.pool.pick(model, set(tried))
+                    if available is None and tried:
+                        break
+                    if now >= deadline:
+                        if available is not None or capacity_waits:
+                            detail = "排队超时（本地并发位一直没空）"
+                            record["error_reason"] = "concurrency-timeout"
+                        else:
+                            detail = "排队超时（全池仍在冷却）"
+                            record["error_reason"] = "queue-timeout"
                         break
                     if waiting_since is None:
-                        waiting_since = time.time()
-                        print(f"[req] {model or '-'} 全池冷却中，排队等待{req_tag}", flush=True)
-                    budget = float(getattr(self.pool.cfg, "queue_wait_seconds", 0) or 0)
-                    if time.time() - waiting_since > budget:
-                        detail = "排队超时（全池仍在冷却）"
-                        record["error_reason"] = "queue-timeout"
+                        waiting_since = now
+                        where = "并发位/最小间隔" if available is not None else "冷却"
+                        print(f"[req] {model or '-'} 候选号都在{where}排队中，等待{req_tag}",
+                              flush=True)
+                    if self._client_gone():
+                        detail = "客户端已断开"
+                        record["error_reason"] = "client_abort"
+                        record["outcome"] = "client_error"
+                        record["status"] = 499
                         break
-                    time.sleep(0.5)
+                    time.sleep(min(0.2, max(0.02, deadline - now)))
                     continue
                 if trace.get("sticky") == "hit":
                     record["sticky"] = "hit"
-                tried.add(account.name)
                 attempts.setdefault(account.name, 0)
+                net_attempts.setdefault(account.name, 0)
 
             provider = self.pool.provider(account)
             adapter = account.adapter
@@ -546,29 +620,41 @@ class RelayHandler(BaseHTTPRequestHandler):
                 detail = f"{account.name}: 缺凭据"
                 record["error_reason"] = "missing-key"
                 drop_pin(account)
+                tried.add(account.name)
                 record["failovers"] += 1
                 account = None
                 continue
 
             # 并发位要一直占到响应（含流）跑完，否则上游看到的并发并没有被真正限制住
-            if not self.pool.acquire(account):
-                self.pool.note_request(account, model, "concurrency-timeout")
-                detail = f"{account.name}: 并发排队超时"
-                record["error_reason"] = "concurrency-timeout"
-                switch_only(account, "并发排队超时")
-                record["failovers"] += 1
+            if not self.pool.acquire(account, timeout=self._slot_timeout(deadline)):
+                # 号没坏，只是这一刻没坑：不算换号、不解钉、也不把它踢出候选
+                capacity_waits += 1
+                busy_until[account.name] = time.time() + 0.25
+                if not busy_noted:
+                    busy_noted = True
+                    switch_only(account, "并发位已满")
                 account = None
                 continue
 
-            if not self.pool.wait_turn(account):
+            if not self.pool.wait_turn(account, timeout=self._slot_timeout(deadline)):
                 self.pool.release(account)
-                self.pool.note_request(account, model, "queue-timeout")
-                detail = f"{account.name}: 排队超时"
-                record["error_reason"] = "queue-timeout"
-                switch_only(account, "排队超时")
-                record["failovers"] += 1
+                capacity_waits += 1
+                busy_until[account.name] = time.time() + 0.25
+                switch_only(account, "最小间隔排队")
                 account = None
                 continue
+
+            if self._client_gone():
+                # 拿到并发位才发现客户端已经走了：立刻还回去，别为死连接打上游
+                self.pool.release(account)
+                detail = "客户端已断开"
+                record["error_reason"] = "client_abort"
+                record["outcome"] = "client_error"
+                record["status"] = 499
+                record["account"] = account.name
+                record["provider"] = account.provider_id
+                account = None
+                break
 
             gated = account
             record["account"] = gated.name
@@ -576,16 +662,20 @@ class RelayHandler(BaseHTTPRequestHandler):
             try:
                 outcome = self._attempt(method, path, body, stream, model, gated,
                                        adapter, effective, key, inbound, started_at,
-                                       attempts, retry_budget, record)
+                                       attempts, retry_budget, record, net_attempts)
             finally:
                 self.pool.release(gated)
 
-            action, detail_out = outcome
+            action, detail_out, wait_s = outcome
             if action == "done":
                 return
             if action == "retry":
-                continue                      # 同号退避重试：account 保持不变
+                # 同号退避重试：并发位已经在上面还回去了，这一步不占坑睡觉
+                if wait_s > 0:
+                    time.sleep(wait_s)
+                continue
             drop_pin(gated)                    # 失败换号 → 解除钉子
+            tried.add(gated.name)
             record["failovers"] += 1
             account = None                    # 换号
             if detail_out:
@@ -596,22 +686,26 @@ class RelayHandler(BaseHTTPRequestHandler):
             "type": "NoAvailableAccount",
             "message": f"号池里没有可用账号（{detail or '全部冷却 / 额度耗尽'}）",
         }}
-        record["status"] = 503
-        record["bytes"] = len(json.dumps(payload, ensure_ascii=False).encode())
-        if not tried:
-            record["outcome"] = "no_account"
-        elif record.get("error_reason") == "throttled-persistent":
-            record["outcome"] = "throttled"
-        else:
-            record["outcome"] = "failover"
+        if record.get("outcome") is None:
+            record["status"] = 503
+            record["bytes"] = len(json.dumps(payload, ensure_ascii=False).encode())
+            if not tried:
+                record["outcome"] = "no_account"
+            elif record.get("error_reason") == "throttled-persistent":
+                record["outcome"] = "throttled"
+            else:
+                record["outcome"] = "failover"
         self._json(503, payload)
 
     def _attempt(self, method, path, body, stream, model, account, adapter, effective,
-                 key, inbound, started_at, attempts, retry_budget, record=None):
-        """跑一次上游请求。返回 ("done"|"retry"|"next", detail)。
+                 key, inbound, started_at, attempts, retry_budget, record=None,
+                 net_attempts=None):
+        """跑一次上游请求。返回 ("done"|"retry"|"next", detail, 退避秒数)。
 
-        调用方已持有该账号的并发位，本方法不负责释放。
+        调用方已持有该账号的并发位，本方法不负责释放；**退避睡眠由调用方在释放
+        并发位之后再做** —— 占着唯一的并发位睡觉，等于把整个号按停几秒。
         """
+        net_attempts = net_attempts if net_attempts is not None else {}
         url = adapter.endpoint(effective) + adapter.map_path(path)
         headers = adapter.build_headers(effective, key, inbound, body)
         req_tag = f" req={record['req_id']}" if record is not None else ""
@@ -626,8 +720,18 @@ class RelayHandler(BaseHTTPRequestHandler):
                 record["_upstream_s"] += time.time() - t0
                 record["error_reason"] = f"net:{type(exc).__name__}"
             self.pool.note_request(account, model, f"net:{type(exc).__name__}")
+            used = net_attempts.get(account.name, 0)
+            if used < 1:
+                # 一次读超时/连接抖动不等于这个号坏了：先同号重试一次，别把健康号
+                # 冷掉 20s —— 过载时每冷一个号都是整池雪崩的一步。
+                net_attempts[account.name] = used + 1
+                print(f"[req] {account.name} {model or '-'} 网络层 {type(exc).__name__} "
+                      f"→ 1.0s 后同号重试 (1/2){req_tag}", flush=True)
+                if record is not None:
+                    record["retries"] += 1
+                return "retry", None, 1.0
             self.pool.apply(account, ErrorDecision("failover", 20, reason=f"net:{type(exc).__name__}"))
-            return "next", f"{account.name}: {type(exc).__name__}"
+            return "next", f"{account.name}: {type(exc).__name__}", 0.0
         if record is not None:
             record["_upstream_s"] += time.time() - t0
             record["upstream_status"] = response.status_code
@@ -636,7 +740,7 @@ class RelayHandler(BaseHTTPRequestHandler):
         if response.status_code < 400:
             self._relay(account, adapter, response, stream=stream, model=model,
                         started=started_at, record=record)
-            return "done", None
+            return "done", None, 0.0
 
         decision = adapter.classify(
             response.status_code, response.content, dict(response.headers), effective)
@@ -649,7 +753,7 @@ class RelayHandler(BaseHTTPRequestHandler):
                 record["error_reason"] = decision.detail or f"client:{response.status_code}"
             self._relay(account, adapter, response, stream=False, model=model,
                         started=started_at, record=record)
-            return "done", None
+            return "done", None, 0.0
 
         if decision.action == "retry":
             used = attempts.get(account.name, 0)
@@ -664,14 +768,13 @@ class RelayHandler(BaseHTTPRequestHandler):
                 if record is not None:
                     record["retries"] += 1
                     record["error_reason"] = "throttled"
-                time.sleep(wait)
-                return "retry", None
+                return "retry", None, wait
             print(f"[req] {account.name} {model or '-'} {response.status_code} "
                   f"限流持续 → 冷却 15s 并换号{req_tag}", flush=True)
             if record is not None:
                 record["error_reason"] = "throttled-persistent"
             self.pool.apply(account, _cooldown("throttled-persistent", 15.0))
-            return "next", f"{account.name}: 限流持续"
+            return "next", f"{account.name}: 限流持续", 0.0
 
         print(f"[req] {account.name} {model or '-'} {response.status_code} "
               f"{decision.reason or 'failover'} → 换号{req_tag}", flush=True)
@@ -679,7 +782,7 @@ class RelayHandler(BaseHTTPRequestHandler):
             record["error_reason"] = decision.reason or f"upstream:{response.status_code}"
         response.close()
         self.pool.apply(account, decision)
-        return "next", f"{account.name}: {decision.reason or response.status_code}"
+        return "next", f"{account.name}: {decision.reason or response.status_code}", 0.0
 
     def _relay(self, account, adapter, response, stream: bool,
                model: str | None = None, started: float | None = None,

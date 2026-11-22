@@ -16,8 +16,10 @@ opencode-pool 是**单机单用户**的号池中转：它把多个自己付费�
 
 ### 边界
 
-- **面板仅 loopback**：直连中转端口时，`/` 与 `/panel` 对非 127.0.0.1 的客户端直接 403
-  （`panel is loopback-only`）。要从局域网看面板，走 DSH 插件入口
+- **面板默认仅 loopback**：直连中转端口时，`/` 与 `/panel` 对非 127.0.0.1 的客户端直接 403
+  （`panel is loopback-only`）。设 `allow_remote_panel: true` 可对「带对 `relay_token`」的
+  远程客户端放行（面板等同于管理台，请只在受信内网使用；`relay_token` 为空时永远拒绝）。
+  要从局域网看面板，走 DSH 插件入口
   （`/api/opencode-pool/panel`），鉴权沿用 dsh-web 自身的登录。
 - **中转端口默认 `127.0.0.1:8790`**，并要求 `Authorization: Bearer <relay_token>`
   （`relay_token` 为空时等于关闭鉴权 —— 生产使用请写上）。

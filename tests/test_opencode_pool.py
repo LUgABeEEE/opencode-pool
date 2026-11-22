@@ -28,7 +28,6 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HERE = ROOTHERE = ROOT
 
-
 def _ts_ago(*, hours=0.0):
     """夹具用的**相对**时间戳。
 
@@ -46,7 +45,6 @@ from opencode_pool.pool import STICKY_MAX, KeyStore, Pool  # noqa: E402
 from opencode_pool.secrets import SecretStore, fingerprint  # noqa: E402
 
 adapters.load_all()
-
 
 class FakeKeyStore:
     """单测用假凭据仓：只认内存映射，**不读 os.environ / ~/.dsh**（B1）。
@@ -75,14 +73,12 @@ class FakeKeyStore:
     def delete(self, env_name: str) -> bool:
         return self.values.pop(env_name, None) is not None
 
-
 def use_env(testcase, **values):
     """真实 KeyStore 的用例用它设环境变量，class 结束自动恢复。"""
     patcher = mock.patch.dict(os.environ, values)
     patcher.start()
     testcase.addClassCleanup(patcher.stop)
     return patcher
-
 
 def set_windows(pool, name, **percents):
     """给测试账号铺一组额度采样（默认都还很宽裕）。"""
@@ -92,12 +88,10 @@ def set_windows(pool, name, **percents):
                                             resets_at=time.time() + 3600)
     return account_
 
-
 def conversation(model: str = "deepseek-v4.1-flash", user: str = "同一个问题") -> bytes:
     return json.dumps({"model": model, "messages": [
         {"role": "system", "content": "sys"},
         {"role": "user", "content": user}]}).encode()
-
 
 def make_config(pool: list[dict], providers: dict | None = None) -> Config:
     return Config.from_dict({
@@ -111,10 +105,8 @@ def make_config(pool: list[dict], providers: dict | None = None) -> Config:
         "accounts": pool,
     })
 
-
 def account(name: str, key_env: str = "K", provider: str = "opencode-go", **extra) -> dict:
     return {"name": name, "provider": provider, "key_env": key_env, **extra}
-
 
 class RegistryTest(unittest.TestCase):
     def test_builtin_adapters_registered(self):
@@ -128,7 +120,6 @@ class RegistryTest(unittest.TestCase):
         self.assertEqual([w["key"] for w in descriptor["windows"]], ["rolling", "weekly", "monthly"])
         secret = [f for f in descriptor["fields"] if f["key"] == "key_env"][0]
         self.assertTrue(secret["sensitive"])
-
 
 class ConfigTest(unittest.TestCase):
     def test_v1_config_migrates(self):
@@ -152,7 +143,6 @@ class ConfigTest(unittest.TestCase):
     def test_unknown_provider_is_reported(self):
         cfg = make_config([account("a", provider="ghost")])
         self.assertTrue(any("provider ghost" in p for p in cfg.validate()))
-
 
 class AdapterTest(unittest.TestCase):
     def setUp(self):
@@ -214,7 +204,6 @@ class AdapterTest(unittest.TestCase):
         self.assertEqual(decision.action, "failover")
         self.assertEqual(decision.scope, "account")
         self.assertGreaterEqual(decision.cooldown_seconds, 600)
-
 
 class SchedulerTest(unittest.TestCase):
     def pool_with(self, specs):
@@ -286,7 +275,6 @@ class SchedulerTest(unittest.TestCase):
         self.assertAlmostEqual(derived["eta_seconds"]["monthly"] / 3600, 4.0, places=2)
         self.assertEqual(derived["binding_window"], "monthly")
 
-
 # ── 端到端：假上游 ──────────────────────────────────────────────────────
 class FakeUpstream(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
@@ -340,7 +328,6 @@ class FakeUpstream(BaseHTTPRequestHandler):
             }},
         }
         return self._send(200, body)
-
 
 class EndToEndTest(unittest.TestCase):
     @classmethod
@@ -413,10 +400,8 @@ class EndToEndTest(unittest.TestCase):
         finally:
             self.pool.cfg.relay_token = ""
 
-
 if __name__ == "__main__":
     unittest.main(verbosity=2)
-
 
 class CliTest(unittest.TestCase):
     """命令行必须容忍 `serve --config X`（插件与 start.sh 就是这种写法）。"""
@@ -435,7 +420,6 @@ class CliTest(unittest.TestCase):
 
         args = build_parser().parse_args(["check"])
         self.assertEqual(args.config, DEFAULT_CONFIG)
-
 
 # ── 面板改配置：加号 / 换 key / 删号 ────────────────────────────────
 class AccountLifecycleTest(unittest.TestCase):
@@ -564,7 +548,6 @@ class AccountLifecycleTest(unittest.TestCase):
         self.assertEqual(bad_provider.status_code, 400)
         bad_name = self.post("/v1/pool/accounts", {"name": "has space", "provider": "opencode-go", "key": "x"})
         self.assertEqual(bad_name.status_code, 400)
-
 
 # ── 会话粘性（sticky）──────────────────────────────────────────────────
 class StickyRoutingTest(unittest.TestCase):
@@ -773,7 +756,6 @@ class StickyRoutingTest(unittest.TestCase):
         self.assertIn("alive", pool._sticky)
         self.assertNotIn("dead", pool._sticky)
 
-
 # ── /metrics ───────────────────────────────────────────────────────────
 SAMPLE_RE = re.compile(r"^([a-zA-Z_:][a-zA-Z0-9_:]*)(\{[^}]*\})? (-?[0-9.eE+]+)$")
 REQUIRED_FAMILIES = (
@@ -787,7 +769,6 @@ REQUIRED_FAMILIES = (
     "pool_sticky_hits_total",
     "pool_sticky_misses_total",
 )
-
 
 class MetricsTest(unittest.TestCase):
     def pool(self):
@@ -907,7 +888,6 @@ class MetricsTest(unittest.TestCase):
         text = pool.metrics_text()
         self.assertIn("pool_sticky_hits_total 1", text)
         self.assertIn("pool_sticky_misses_total 1", text)
-
 
 # ── /healthz 就绪语义 ──────────────────────────────────────────────────
 class ReadinessTest(unittest.TestCase):
@@ -1062,7 +1042,6 @@ class ReadinessTest(unittest.TestCase):
         self.assertNotIn("key", text.lower().replace("monkey", ""),
                          "文案里不许出现 key 字样")
 
-
 # ── 流式响应：ttfb/bytes + usage 记账（回归：NameError 只在日志里可见）──
 class StreamRelayTest(unittest.TestCase):
     USAGE_FRAME = (b'data: {"choices":[{"delta":{"content":"ok"}}],'
@@ -1160,7 +1139,6 @@ class StreamRelayTest(unittest.TestCase):
         self.assertEqual(account_.cache_read_tokens, 0)
         self.assertEqual(account_.input_tokens, 0)
         self.assertEqual(account_.requests, 1)
-
 
 # ── 观测端点（HTTP 层）────────────────────────────────────────────────
 class ObservabilityHttpTest(unittest.TestCase):
@@ -1298,7 +1276,6 @@ class ObservabilityHttpTest(unittest.TestCase):
         for key in ("pinned", "hits", "misses"):
             self.assertIn(key, payload["sticky"])
 
-
 # ── 端到端：同一对话三轮钉同一账号 ────────────────────────────────────
 class StickyEndToEndTest(unittest.TestCase):
     @classmethod
@@ -1356,7 +1333,6 @@ class StickyEndToEndTest(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(FakeUpstream.calls, ["k-b"])
         self.assertEqual(self.pool.snapshot()["sticky"]["pinned"], 2)
-
 
 # ── 指纹：对「对话增长」不敏感（review 用真 relay 复现过：anthropic 形状第 2 轮就断）──
 class StickyFingerprintTest(unittest.TestCase):
@@ -1469,7 +1445,6 @@ class StickyFingerprintTest(unittest.TestCase):
         self.assertEqual(self.pool.sticky_hits + self.pool.sticky_misses, 0)
         self.assertEqual(self.pool._sticky, {})
 
-
 # ── 并发：同 key 压测 + 同对话并发换号 ─────────────────────────────────
 class StickyConcurrencyTest(unittest.TestCase):
     def test_parallel_pick_with_unpin_and_cooldowns(self):
@@ -1520,7 +1495,6 @@ class StickyConcurrencyTest(unittest.TestCase):
         self.assertIsNotNone(first)
         self.assertEqual(second.name, first.name, "压测后钉子应收敛到唯一账号")
         self.assertEqual(pool._sticky[key][1], first.name)
-
 
 class FailoverBarrierUpstream(BaseHTTPRequestHandler):
     """k-a 的前两个请求在 barrier 上会合，然后一个 200、一个额度 429。
@@ -1574,7 +1548,6 @@ class FailoverBarrierUpstream(BaseHTTPRequestHandler):
         return self._send(200, {"id": "x", "choices": [
             {"message": {"role": "assistant", "content": "ok"}}],
             "usage": {"opencode": {"allowance": 0.01}}})
-
 
 class ConcurrentFailoverTest(unittest.TestCase):
     @classmethod
@@ -1646,7 +1619,6 @@ class ConcurrentFailoverTest(unittest.TestCase):
         hits = self.pool.sticky_hits
         self.assertEqual(self.chat().status_code, 200)
         self.assertEqual(self.pool.sticky_hits, hits + 1)
-
 
 # ── 本地容量等待：只换本次请求的号，不解钉 ─────────────────────────────
 class CapacityWaitTest(unittest.TestCase):
@@ -1729,6 +1701,75 @@ class CapacityWaitTest(unittest.TestCase):
 
         self.run_with("wait_turn", deny)
 
+    def test_queue_budget_is_one_global_deadline(self):
+        """并发位全满时必须在一个期限内收口，而不是「每个号各等 30s」。
+
+        旧实现：acquire 默认等 30s，两个号 = 60s 串行等待，客户端 60s 早走了；
+        过载时 503 的 queue_ms 稳定卡在 60s / 90s 就是这个形状（2026-11-11 实测）。
+        """
+        import requests
+
+        pool = self.pool
+        original_acquire = pool.acquire
+        original_budget = pool.cfg.queue_wait_seconds
+        pool.cfg.queue_wait_seconds = 0.6
+
+        def always_busy(account, timeout=30.0):
+            return False
+
+        pool.acquire = always_busy
+        try:
+            started = time.time()
+            resp = requests.post(f"{self.base}/v1/chat/completions",
+                                 json=json.loads(conversation(user="并发位全满")), timeout=10)
+            elapsed = time.time() - started
+        finally:
+            pool.acquire = original_acquire
+            pool.cfg.queue_wait_seconds = original_budget
+
+        self.assertEqual(resp.status_code, 503, resp.text)
+        self.assertLess(elapsed, 5.0,
+                        f"排队必须受 queue_wait_seconds 约束，实际等了 {elapsed:.1f}s")
+        self.assertIn("NoAvailableAccount", resp.text)
+
+class ThrottleBackoffTest(unittest.TestCase):
+    """429 退避不能再占着并发位睡觉（那等于把整号按停 2/4/8 秒）。"""
+
+    def test_attempt_returns_backoff_instead_of_sleeping(self):
+        from opencode_pool.server import RelayHandler
+
+        cfg = make_config([account("a", "K_BK_A")])
+        cfg.min_interval_seconds = 0.0
+        cfg.max_inflight = 1
+        pool = Pool(cfg, keys=FakeKeyStore({"K_BK_A": "k-a"}))
+        acct = pool.accounts[0]
+        effective = acct.effective(pool.provider(acct))
+
+        class Fake429:
+            status_code = 429
+            content = b'{"error": {"type": "rate_limit"}}'
+            headers: dict = {}
+
+            def close(self):
+                return None
+
+        handler = RelayHandler.__new__(RelayHandler)
+        handler.pool = pool
+        original = pool.http.request
+        pool.http.request = lambda *a, **k: Fake429()
+        try:
+            started = time.time()
+            action, detail, wait = handler._attempt(
+                "POST", "/v1/chat/completions", b"{}", False, "m", acct, acct.adapter,
+                effective, "k-a", {}, time.time(), {}, 3, None, {})
+            elapsed = time.time() - started
+        finally:
+            pool.http.request = original
+
+        self.assertEqual(action, "retry")
+        self.assertIsNone(detail)
+        self.assertGreaterEqual(wait, 2.0, "退避秒数要交给调用方，由它在释放并发位之后再睡")
+        self.assertLess(elapsed, 0.5, "退避睡眠必须发生在 _attempt 之外（否则占着并发位睡觉）")
 
 # ── embeddings / completions：没有对话形状 → 走普通选号 ────────────────
 class NonConversationRoutingTest(unittest.TestCase):
@@ -1785,7 +1826,6 @@ class NonConversationRoutingTest(unittest.TestCase):
         self.assertEqual(resp.status_code, 200, resp.text)
         self.assertEqual(len(FakeUpstream.calls), 1)
         self.assertEqual(self.pool.snapshot()["sticky"]["pinned"], 0)
-
 
 # ── 日志噪声：客户端断开只留一行摘要，正常错误日志不变 ────────────────
 class DisconnectNoiseTest(unittest.TestCase):
@@ -1948,7 +1988,6 @@ class DisconnectNoiseTest(unittest.TestCase):
         self.assertNotIn("Traceback", log)
         self.assertNotIn("客户端断开", log)
 
-
 # ── 状态落盘并发安全（R6）────────────────────────────────────────────
 class StatePersistenceTest(unittest.TestCase):
     def make_pool(self):
@@ -2017,7 +2056,6 @@ class StatePersistenceTest(unittest.TestCase):
             Pool(cfg, keys=FakeKeyStore())          # 坏状态不该挡住启动
         self.assertIn("state load failed", output.getvalue())
 
-
 # ── SecretStore：锁 + 外部写入可见 + 缓存自愈（L3）────────────────────
 class SecretStoreSelfHealTest(unittest.TestCase):
     def setUp(self):
@@ -2071,7 +2109,6 @@ class SecretStoreSelfHealTest(unittest.TestCase):
             data = json.load(f)
         self.assertEqual(len(data["secrets"]), 8 * 30)
 
-
 # ── 真 KeyStore 的三级优先级（L2）──────────────────────────────────
 class KeyStoreTest(unittest.TestCase):
     def setUp(self):
@@ -2117,7 +2154,6 @@ class KeyStoreTest(unittest.TestCase):
         with mock.patch.dict(os.environ, {"K_DSH_ONLY": ""}):
             self.assertEqual(self.keys.get("K_DSH_ONLY"), "dsh-only")
 
-
 # ── 结构化请求日志 requests.jsonl ─────────────────────────────────────
 SPEC_KEYS = {
     "ts", "req_id", "method", "path", "model", "stream", "account", "provider",
@@ -2126,7 +2162,6 @@ SPEC_KEYS = {
 }
 TOKEN_KEYS = {"input", "cache_read", "output", "reasoning",
               "cache_write_5m", "cache_write_1h"}
-
 
 class RequestLoggerTest(unittest.TestCase):
     def setUp(self):
@@ -2182,12 +2217,10 @@ class RequestLoggerTest(unittest.TestCase):
         self.assertGreater(rows, 0, "轮转后的文件必须仍是可解析的 JSONL")
         self.assertLessEqual(rows, 40)
 
-
 def parse_iso_stamp(value: str):
     from datetime import datetime
 
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
-
 
 class RequestLogEndToEndTest(unittest.TestCase):
     """真 relay：每次转发（成功/换号/无号）写一行，且与 relay.log 可对账。"""
@@ -2341,7 +2374,6 @@ class RequestLogEndToEndTest(unittest.TestCase):
         self.assertEqual(self.post().status_code, 200)
         self.assertFalse(os.path.exists(self.log_path))
 
-
 class StatsClientErrorTest(unittest.TestCase):
     """被取消的请求不算成功：成功率分母是"完成请求"，client_error 单列。"""
 
@@ -2381,6 +2413,7 @@ class StatsScriptTest(unittest.TestCase):
         tmp = tempfile.mkdtemp(prefix="pool-stats-")
         self.addCleanup(lambda: shutil.rmtree(tmp, ignore_errors=True))
         path = os.path.join(tmp, "requests.jsonl")
+
         rows = [
             {"ts": _ts_ago(hours=5), "req_id": "aaaaaaaa", "status": 200,
              "outcome": "ok", "account": "go02", "ttfb_ms": 100.0, "total_ms": 200.0,
@@ -2420,7 +2453,6 @@ class StatsScriptTest(unittest.TestCase):
         self.assertIn("按 --since 跳过: 1", out)
         self.assertIn("跳过坏行: 1", out)
         self.assertIn("go02", out)
-
 
 # ── 客户端取消流式响应：摘要一次 + JSONL 记 client_error（V1）──────────
 class ClientAbortWriteTest(unittest.TestCase):
@@ -2549,3 +2581,43 @@ class ClientAbortWriteTest(unittest.TestCase):
         self.assertEqual(row["error_reason"], "client_abort")
         self.assertEqual(row["bytes"], 0)
         self.assert_summary_once(output.getvalue(), "/v1/chat/completions")
+
+
+# ── 远程面板：默认只给 loopback，显式开启后必须带对 token ──────────────
+class RemotePanelAuthTest(unittest.TestCase):
+    """一台跑中转、另一台用 DSH 面板的部署：远程面板是 opt-in + token。"""
+
+    def handler(self, addr: str, token: str = "t0k", allow: bool = False,
+                auth: str | None = None):
+        from opencode_pool.server import RelayHandler
+
+        cfg = make_config([account("a", "K_RP")])
+        cfg.relay_token = token
+        cfg.allow_remote_panel = allow
+        pool = Pool(cfg, keys=FakeKeyStore({"K_RP": "k"}))
+        handler = RelayHandler.__new__(RelayHandler)
+        handler.pool = pool
+        handler.client_address = (addr, 45678)
+        handler.headers = {"Authorization": auth} if auth else {}
+        return handler
+
+    def test_loopback_always_allowed(self):
+        self.assertTrue(self.handler("127.0.0.1")._panel_authorized())
+        self.assertTrue(self.handler("::1")._panel_authorized())
+
+    def test_remote_refused_by_default_even_with_token(self):
+        self.assertFalse(
+            self.handler("192.168.1.105", auth="Bearer t0k")._panel_authorized(),
+            "没显式开 allow_remote_panel 时，带对 token 也不能开面板")
+
+    def test_remote_allowed_with_flag_and_token(self):
+        self.assertTrue(
+            self.handler("192.168.1.105", allow=True, auth="Bearer t0k")._panel_authorized())
+
+    def test_remote_wrong_token_refused(self):
+        self.assertFalse(self.handler("192.168.1.105", allow=True, auth="Bearer nope")._panel_authorized())
+        self.assertFalse(self.handler("192.168.1.105", allow=True)._panel_authorized())
+
+    def test_remote_refused_when_no_token_configured(self):
+        """空 relay_token + 放开远程 = 谁都能进管理台；必须拒绝。"""
+        self.assertFalse(self.handler("192.168.1.105", token="", allow=True)._panel_authorized())
