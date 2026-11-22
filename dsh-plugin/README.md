@@ -5,8 +5,16 @@
 ## 装
 
 ```bash
+# 从 npm（0.2.2 起）
+dsh plugin add dsh-plugin-opencode-pool
+
+# 或从本地克隆（和上面是同一个包，只是来源不同）
 dsh plugin add /path/to/opencode-pool/dsh-plugin
 ```
+
+> ⚠️ 别装仓库根（`dsh plugin add github:.../opencode-pool`）：仓库根没有 `package.json`，
+> pnpm 只会写一个占位文件，插件管理器随后报「这个包没有声明组合包」。详情见
+> [../docs/troubleshooting.md](../docs/troubleshooting.md)。
 
 `dsh plugin add` 读 `package.json → dsh.bundle.patch`，把包加进 profile 的 `dsh.profile.bundles`，
 启动时合并本插件的 `cordis.patch.yml`（只贡献一行 Loader 配置）。
