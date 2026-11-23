@@ -64,7 +64,11 @@ python3 -m opencode_pool check           # 改完配置先校验
 DSH 用户装插件（侧边栏面板、局域网可用、token 服务端注入）：
 
 ```bash
-# 注意装的是 dsh-plugin 子目录，不是仓库根：dsh.bundle 只声明在子目录的 package.json 里
+# 从 npm（0.2.2 起由 GitHub Actions 自动发布）
+dsh plugin add dsh-plugin-opencode-pool
+
+# 或从本地克隆 —— 注意装的是 dsh-plugin 子目录，不是仓库根：
+# dsh.bundle 只声明在子目录的 package.json 里
 dsh plugin add /path/to/opencode-pool/dsh-plugin
 ```
 
