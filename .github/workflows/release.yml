@@ -1,0 +1,142 @@
+# 发布：推一个 v* tag 即由 Actions 自动发布到 npm（带 provenance 与 GitHub Release）。
+#
+# 需要仓库 secret：NPM_TOKEN
+#   npmjs.com → Access Tokens → Generate New Token → **Automation**（绕过 OTP，适合 CI）
+#   GitHub → Settings → Secrets and variables → Actions → New repository secret
+#
+# 为什么不用 `npm login` 手动发：npm 的 web 登录会回落到交互式用户名/密码/OTP，
+# 在无人值守的机器上走不通；Automation token + Actions 才是可复现的路径。
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "只打包不发布（预演）"
+        type: boolean
+        default: false
+
+# 同一 tag 只跑一次；并发重复触发不叠加
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write      # 建 GitHub Release
+  id-token: write      # npm provenance
+
+jobs:
+  # 发布前再跑一遍回归：tag 可能打在别人没跑过 CI 的提交上
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: 安装依赖
+        run: python3 -m pip install --quiet requests ruff
+
+      - name: 静态检查
+        run: python3 -m ruff check opencode_pool tests scripts
+
+      - name: Python 回归
+        run: python3 -m unittest discover -s tests
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - name: DSH 插件测试
+        run: node --test tests/plugin.test.mjs
+
+  publish:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      # tag、插件 manifest、仓库根 pyproject 三处版本必须一致，否则宁可不发
+      - name: 版本一致性
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#v}"
+          plugin=$(node -p "require('./dsh-plugin/package.json').version")
+          python=$(python3 - <<'PY'
+          import pathlib, re
+          text = pathlib.Path('pyproject.toml').read_text(encoding='utf-8')
+          print(re.search(r'^version\s*=\s*"([^"]+)"', text, re.M).group(1))
+          PY
+          )
+          echo "tag=$tag plugin=$plugin python=$python"
+          [ "$tag" = "$plugin" ] || { echo "::error::tag $tag 与 dsh-plugin/package.json $plugin 不一致"; exit 1; }
+          [ "$tag" = "$python" ] || { echo "::error::tag $tag 与 pyproject.toml $python 不一致"; exit 1; }
+
+      - name: 密钥检查
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
+            echo "::error::缺少 NPM_TOKEN secret（npmjs.com → Access Tokens → Automation）"
+            exit 1
+          fi
+
+      # 打包清单要在日志里：发布出去的就是这些文件，人眼能核
+      - name: 打包预演
+        working-directory: dsh-plugin
+        run: npm pack --dry-run
+
+      # 同一个版本重复触发时直接跳过，而不是红一次
+      - name: 是否已发布
+        id: exists
+        working-directory: dsh-plugin
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if npm view "dsh-plugin-opencode-pool@${version}" version >/dev/null 2>&1; then
+            echo "already=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::dsh-plugin-opencode-pool@${version} 已存在，跳过发布"
+          else
+            echo "already=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 发布到 npm
+        if: steps.exists.outputs.already == 'false' && github.event.inputs.dry_run != 'true'
+        working-directory: dsh-plugin
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public --provenance
+
+      - name: 预演模式（不发布）
+        if: steps.exists.outputs.already == 'false' && github.event.inputs.dry_run == 'true'
+        working-directory: dsh-plugin
+        run: echo "::notice::dry_run=true，未执行 npm publish"
+
+      - name: GitHub Release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "::notice::Release $GITHUB_REF_NAME 已存在，跳过"
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              --title "v${version}" \
+              --generate-notes \
+              --notes "npm: https://www.npmjs.com/package/dsh-plugin-opencode-pool/v/${version}"
+          fi

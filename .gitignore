@@ -9,3 +9,5 @@ build/
 secrets.json
 pool_state.json
 *.log
+*.tgz
+*.tar.gz

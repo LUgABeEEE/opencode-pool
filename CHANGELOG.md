@@ -11,6 +11,9 @@
 - 修：面板的 403 判据从「硬编码 client_address 白名单」改成 `_panel_authorized()`，
   与 `/metrics` 的鉴权口径一致，便于后续加来源限制
 - 测试：新增 5 条（loopback 恒可、默认拒绝远程、开启+对 token 放行、错 token 拒、空 token 拒）
+- 工程：新增 `.github/workflows/release.yml` —— 推 `v*` tag 即自动发布到 npm
+  （version 三方校验、发布前回归、`npm pack --dry-run` 留清单、`--provenance`、
+  同版本已存在则跳过、自动建 GitHub Release）；`docs/releasing.md` 写清 token 怎么给
 - 文档：`docs/configuration.md` 增字段说明；`SECURITY.md` 的「面板仅 loopback」改写为默认仅 loopback；
   `docs/troubleshooting.md` 增「插件页显示没有声明组合包（装错目录）」一节
 
