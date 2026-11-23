@@ -1,0 +1,13 @@
+# 打包只带源码与文档；以下一律排除
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.pyc
+.ruff_cache/
+.pytest_cache/
+*.tgz
+*.tar.gz
+.DS_Store
+pool_state.json
+requests.jsonl
+*.log

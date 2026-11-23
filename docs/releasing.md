@@ -1,6 +1,8 @@
 # 发版（GitHub Actions → npm）
 
 一条命令发布：打 tag 推上去，剩下交给 `.github/workflows/release.yml`。
+同一个 tag 会发**两个包**：`opencode-pool`（本体，仓库根）与
+`dsh-plugin-opencode-pool`（DSH 插件，`dsh-plugin/`）。
 不需要在本机 `npm login`（npm 的 web 登录会回落到交互式用户名 / 密码 / OTP，
 无人值守时走不通）。
 
@@ -19,11 +21,12 @@
 
 ## 每次发版
 
-1. 改版本号（三处必须一致，workflow 会校验）：
+1. 改版本号（**四处**必须一致，workflow 会逐个校验）：
 
    | 文件 | 字段 |
    | --- | --- |
-   | `dsh-plugin/package.json` | `version` |
+   | `package.json`（仓库根，`opencode-pool`） | `version` |
+   | `dsh-plugin/package.json`（`dsh-plugin-opencode-pool`） | `version` |
    | `pyproject.toml` | `version` |
    | `opencode_pool/__init__.py` | `__version__`（不强制，但别落下） |
 
@@ -38,6 +41,22 @@
 
 4. Actions 里等 `release` 跑完：version 校验 → 回归 → `npm pack --dry-run` →
    `npm publish --provenance` → 建 GitHub Release。
+
+## 暂存发布（staged）
+
+granular token 的发布会进 npm 的「暂存发布」：registry 里先出现包元数据和一个
+`0.0.0-stage` 占位版本，**包体 tarball 返回 404**，要在网页上批准后才可下载。
+判据：
+
+```bash
+curl -sI https://registry.npmjs.org/<包名>/-/<包名>-<版本>.tgz | head -1   # 404 = 未批准
+```
+
+根治办法是 **Trusted Publishing**（OIDC）：npm 包设置 → Trusted Publisher →
+GitHub Actions（仓库 `LUgABeEEE/opencode-pool`、workflow `release.yml`）。
+之后 Actions 用 OIDC 直接发、不再进暂存，也不需要 `NPM_TOKEN`；
+要求发布环境 npm ≥ 11.5（把发布 job 的 node 版本升到 24 即可）。
+两个包要**分别**配一次。
 
 ## 预演与重跑
 

@@ -11,6 +11,9 @@
 - 修：面板的 403 判据从「硬编码 client_address 白名单」改成 `_panel_authorized()`，
   与 `/metrics` 的鉴权口径一致，便于后续加来源限制
 - 测试：新增 5 条（loopback 恒可、默认拒绝远程、开启+对 token 放行、错 token 拒、空 token 拒）
+- 发布：npm 上占住 **`opencode-pool`** 这个名字，发布**本体**（`opencode_pool/` + 文档 +
+  插件源码快照，44 文件 / 121.8 kB）；DSH 插件仍是 `dsh-plugin-opencode-pool`。仓库根新增
+  `package.json`
 - 工程：新增 `.github/workflows/release.yml` —— 推 `v*` tag 即自动发布到 npm
   （version 三方校验、发布前回归、`npm pack --dry-run` 留清单、`--provenance`、
   同版本已存在则跳过、自动建 GitHub Release）；`docs/releasing.md` 写清 token 怎么给
