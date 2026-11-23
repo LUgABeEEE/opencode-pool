@@ -161,9 +161,9 @@ jobs:
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             echo "::notice::Release $GITHUB_REF_NAME 已存在，跳过"
           else
+            notes=$(printf 'npm 本体: https://www.npmjs.com/package/opencode-pool/v/%s\nnpm DSH 插件: https://www.npmjs.com/package/dsh-plugin-opencode-pool/v/%s' "$version" "$version")
             gh release create "$GITHUB_REF_NAME" \
               --title "v${version}" \
               --generate-notes \
-              --notes "npm 本体: https://www.npmjs.com/package/opencode-pool/v/${version}
-npm DSH 插件: https://www.npmjs.com/package/dsh-plugin-opencode-pool/v/${version}"
+              --notes "$notes"
           fi
