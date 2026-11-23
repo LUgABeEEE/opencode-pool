@@ -1,11 +1,18 @@
 # 发布：推一个 v* tag 即由 Actions 自动发布到 npm（带 provenance 与 GitHub Release）。
 #
+# 两个包，同一个 tag：
+#   opencode-pool             —— 本体（Python 服务 + 文档 + 插件源码），仓库根
+#   dsh-plugin-opencode-pool  —— DSH 插件，dsh-plugin/
+#
 # 需要仓库 secret：NPM_TOKEN
 #   npmjs.com → Access Tokens → Generate New Token → **Automation**（绕过 OTP，适合 CI）
 #   GitHub → Settings → Secrets and variables → Actions → New repository secret
 #
 # 为什么不用 `npm login` 手动发：npm 的 web 登录会回落到交互式用户名/密码/OTP，
 # 在无人值守的机器上走不通；Automation token + Actions 才是可复现的路径。
+#
+# 注意：granular token 的发布会进 npm 的「暂存发布」（staged），需要在网页上批准一次；
+# 想彻底免掉这一步就配 Trusted Publisher（见 docs/releasing.md）。
 name: release
 
 on:
@@ -18,7 +25,6 @@ on:
         type: boolean
         default: false
 
-# 同一 tag 只跑一次；并发重复触发不叠加
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
@@ -61,6 +67,14 @@ jobs:
     needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package: opencode-pool
+            dir: .
+          - package: dsh-plugin-opencode-pool
+            dir: dsh-plugin
     steps:
       - uses: actions/checkout@v7
 
@@ -69,21 +83,26 @@ jobs:
           node-version: "22"
           registry-url: "https://registry.npmjs.org"
 
-      # tag、插件 manifest、仓库根 pyproject 三处版本必须一致，否则宁可不发
+      # tag（dispatch 时取根 manifest）、本包 manifest、pyproject 三处版本必须一致
       - name: 版本一致性
         run: |
           set -euo pipefail
-          tag="${GITHUB_REF_NAME#v}"
-          plugin=$(node -p "require('./dsh-plugin/package.json').version")
+          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            tag="${GITHUB_REF_NAME#v}"
+          else
+            tag=$(node -p "require('./package.json').version")
+          fi
+          if [ "${{ matrix.dir }}" = "." ]; then manifest="./package.json"; else manifest="./${{ matrix.dir }}/package.json"; fi
+          mine=$(node -p "require('$manifest').version")
           python=$(python3 - <<'PY'
           import pathlib, re
           text = pathlib.Path('pyproject.toml').read_text(encoding='utf-8')
           print(re.search(r'^version\s*=\s*"([^"]+)"', text, re.M).group(1))
           PY
           )
-          echo "tag=$tag plugin=$plugin python=$python"
-          [ "$tag" = "$plugin" ] || { echo "::error::tag $tag 与 dsh-plugin/package.json $plugin 不一致"; exit 1; }
-          [ "$tag" = "$python" ] || { echo "::error::tag $tag 与 pyproject.toml $python 不一致"; exit 1; }
+          echo "event=${GITHUB_EVENT_NAME} tag=$tag mine=$mine python=$python"
+          [ "$tag" = "$mine" ] || { echo "::error::${{ matrix.package }} manifest $mine 与 tag $tag 不一致"; exit 1; }
+          [ "$tag" = "$python" ] || { echo "::error::pyproject.toml $python 与 tag $tag 不一致"; exit 1; }
 
       - name: 密钥检查
         env:
@@ -96,38 +115,45 @@ jobs:
 
       # 打包清单要在日志里：发布出去的就是这些文件，人眼能核
       - name: 打包预演
-        working-directory: dsh-plugin
+        working-directory: ${{ matrix.dir }}
         run: npm pack --dry-run
 
       # 同一个版本重复触发时直接跳过，而不是红一次
       - name: 是否已发布
         id: exists
-        working-directory: dsh-plugin
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          version=$(node -p "require('./package.json').version")
-          if npm view "dsh-plugin-opencode-pool@${version}" version >/dev/null 2>&1; then
+          if [ "${{ matrix.dir }}" = "." ]; then manifest="./package.json"; else manifest="./${{ matrix.dir }}/package.json"; fi
+          version=$(node -p "require('$manifest').version")
+          if npm view "${{ matrix.package }}@${version}" version >/dev/null 2>&1; then
             echo "already=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::dsh-plugin-opencode-pool@${version} 已存在，跳过发布"
+            echo "::notice::${{ matrix.package }}@${version} 已存在，跳过发布"
           else
             echo "already=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: 发布到 npm
         if: steps.exists.outputs.already == 'false' && github.event.inputs.dry_run != 'true'
-        working-directory: dsh-plugin
+        working-directory: ${{ matrix.dir }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --access public --provenance
 
       - name: 预演模式（不发布）
         if: steps.exists.outputs.already == 'false' && github.event.inputs.dry_run == 'true'
-        working-directory: dsh-plugin
+        working-directory: ${{ matrix.dir }}
         run: echo "::notice::dry_run=true，未执行 npm publish"
 
+  announce:
+    needs: publish
+    if: github.event_name == 'push' && github.event.inputs.dry_run != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
       - name: GitHub Release
-        if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -138,5 +164,6 @@ jobs:
             gh release create "$GITHUB_REF_NAME" \
               --title "v${version}" \
               --generate-notes \
-              --notes "npm: https://www.npmjs.com/package/dsh-plugin-opencode-pool/v/${version}"
+              --notes "npm 本体: https://www.npmjs.com/package/opencode-pool/v/${version}
+npm DSH 插件: https://www.npmjs.com/package/dsh-plugin-opencode-pool/v/${version}"
           fi

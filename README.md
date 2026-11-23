@@ -72,6 +72,13 @@ dsh plugin add dsh-plugin-opencode-pool
 dsh plugin add /path/to/opencode-pool/dsh-plugin
 ```
 
+npm 上是两个包，别装错：
+
+| 包名 | 是什么 |
+| --- | --- |
+| [`opencode-pool`](https://www.npmjs.com/package/opencode-pool) | **本体**：Python 服务（`opencode_pool/`）+ 文档 + 插件源码快照。`npm i` 装下来是为了看源码 / 取文档，跑服务仍用 `python3 -m opencode_pool` |
+| [`dsh-plugin-opencode-pool`](https://www.npmjs.com/package/dsh-plugin-opencode-pool) | **DSH 插件**：`dsh plugin add` 装的就是它 |
+
 装错成仓库根时，插件页会显示「这个包没有声明组合包」——判据与修法见
 [docs/troubleshooting.md](docs/troubleshooting.md#插件页显示这个包没有声明组合包装错目录)。
 

@@ -1,0 +1,51 @@
+{
+  "name": "opencode-pool",
+  "version": "0.2.2",
+  "description": "OpenCode 号池：把多个 OpenCode Go 订阅合成一个 OpenAI / Anthropic 兼容入口（Python 服务；DSH 插件另见 dsh-plugin-opencode-pool）",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LUgABeEEE/opencode-pool.git"
+  },
+  "homepage": "https://github.com/LUgABeEEE/opencode-pool#readme",
+  "bugs": {
+    "url": "https://github.com/LUgABeEEE/opencode-pool/issues"
+  },
+  "keywords": [
+    "opencode",
+    "account-pool",
+    "relay",
+    "openai-compatible",
+    "anthropic",
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "README.md",
+    "CHANGELOG.md",
+    "SECURITY.md",
+    "LICENSE",
+    "pyproject.toml",
+    ".npmignore",
+    "opencode_pool/*.py",
+    "opencode_pool/panel/*.html",
+    "opencode_pool/adapters/*.py",
+    "opencode_pool/adapters/ext/*.md",
+    "dsh-plugin/package.json",
+    "dsh-plugin/README.md",
+    "dsh-plugin/cordis.patch.yml",
+    "dsh-plugin/lib/*.js",
+    "dsh-plugin/assets/icon.svg",
+    "docs/*.md",
+    "deploy/*",
+    "scripts/*.py",
+    "scripts/*.sh"
+  ]
+}
