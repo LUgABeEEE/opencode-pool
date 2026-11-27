@@ -40,7 +40,7 @@ jobs:
           cache-dependency-path: pyproject.toml
 
       - name: 语法检查（compileall，不联网）
-        run: python3 -m compileall -q opencode_pool tests scripts
+        run: python3 -m compileall -q opencode_pool tests scripts winclient
 
       # 测试本身不联网、不起真实上游（端到端用例起本地 FakeUpstream）；
       # 运行时依赖只有 requests。
@@ -48,10 +48,16 @@ jobs:
         run: python3 -m pip install --quiet requests ruff
 
       - name: 静态检查（ruff：未定义名 / 未用导入 / 语法级规则）
-        run: python3 -m ruff check opencode_pool tests scripts
+        run: python3 -m ruff check opencode_pool tests scripts winclient
 
       - name: Python 回归（unittest）
         run: python3 -m unittest discover -s tests
+
+      # 桌面客户端的端到端自检：临时目录造配置 → 真起中转子进程 → 加号/查额度/停服
+      # → 日志解析 → Codex 片段合并。无 tkinter/图形会话的 runner 自动跳过 GUI 用例。
+      - name: Windows 客户端自检（GUI 用例自动 SKIP）
+        if: matrix.python-version == '3.12'
+        run: python3 winclient/selftest.py
 
   node:
     runs-on: ubuntu-latest

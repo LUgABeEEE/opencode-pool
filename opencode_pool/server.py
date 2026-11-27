@@ -293,6 +293,8 @@ class RelayHandler(BaseHTTPRequestHandler):
             return self._remove_account(body)
         if path == "/v1/pool/reload":
             return self._reload()
+        if path == "/v1/pool/shutdown":
+            return self._shutdown()
 
         if path in PROXY_PATHS:
             try:
@@ -321,6 +323,17 @@ class RelayHandler(BaseHTTPRequestHandler):
             self.pool._dirty = True
         self.pool._save_state(force=True)
         return self._json(200, self.pool.snapshot())
+
+    def _shutdown(self):
+        """让自己体面退出：`serve()` 的 finally 会把 state 落盘。
+
+        只给本机：远程面板能加号/换 key 不代表能停服（`allow_remote_panel` 也不放开它）。
+        先回响应再停，否则调用方拿到的是连接被重置。
+        """
+        if not self._loopback():
+            return self._json(403, {"error": "shutdown is loopback-only"})
+        self._json(200, {"stopping": True})
+        threading.Timer(0.2, self.server.shutdown).start()
 
     def _reload(self):
         try:
