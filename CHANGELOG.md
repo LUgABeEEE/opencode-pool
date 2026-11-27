@@ -1,5 +1,37 @@
 # 变更记录
 
+## 0.3.0
+
+Windows 桌面客户端（`winclient/`），以及为它配套的一处服务端改动和一轮评审修复。
+
+- 加：**桌面客户端**（tkinter + ctypes，零第三方依赖）。托盘常驻、命名互斥单实例；
+  五页：仪表盘（三档额度环 / 池内最坏点 / 冷却倒计时）、账号（加号 / 换 key / 暂停 / 删除 /
+  清冷却，服务没起来时直接改配置）、接驳（base_url + token + 五种片段，一键写 Codex
+  `config.toml` 与用户环境变量并能还原）、请求（`requests.jsonl` 尾部 512KB 筛选 +
+  P50/P95 + `relay.log` 控制台）、设置（客户端偏好与中转参数分区，`check` 诊断）；
+  托管 `python -m opencode_pool serve`（外部已在跑的实例只 attach、不杀）；
+  `build_exe.ps1` 可打 PyInstaller 包（exe 不含内核，仍需外部 Python + 项目目录）
+- 加：`POST /v1/pool/shutdown`（**仅 loopback**）。Windows 上 `terminate()` 是
+  TerminateProcess，`serve()` 的 `finally` 不执行；客户端停止前先请服务端自己收尾，
+  保住内存里最后几秒的用量/冷却状态。远程面板即使开了 `allow_remote_panel` 也用不了它
+- 修（评审发现的真实缺陷，均补了回归用例）：
+  - Codex 配置写入把顶层键追加到文件末尾 → 落进最后一张表，`model_provider` 静默不生效；
+    且用户原有的 `model_provider` 会与新键重复（TOML 语法错）。现在顶层键替换、
+    表段整段替换，写前用 `tomllib` 自校验，写盘原子替换并保留 CRLF
+  - 环境变量写入改为"先落还原点再动注册表"，还原按原类型（`REG_EXPAND_SZ` 不再被写成
+    字面量），中途失败按原值回滚
+  - 进程托管加互斥锁：启动等待中按"停止"不再被静默忽略，也没有第二个进程变成孤儿的路径；
+    主动停止/重启不再触发"中转进程退出了"假告警
+  - 离线"暂停"同时同步 `pool_state.json`（否则下次启动被 state 里的 `enabled` 覆盖回去）
+  - 密钥仓解析失败不再当成"空仓"（一次瞬时读失败会清空所有槽位）
+  - 请求日志"协议"列按路径后缀判（`/v1/chat/completions` 原来显示为空）；尾部读只在
+    真的截断半行时才丢第一行
+  - 试探性细节：`find_python` 在打包版不再拿 exe 当中转解释器、`build_exe.ps1` 的
+    `@args` 笔误、监听地址改动改为提示重启（热重载不重绑端口）、离线轮询不再每秒打
+    `/healthz`、环境变量面板不再明文显示 token
+- 工程：CI 把 `winclient` 纳入 compileall / ruff，并在 Python 3.12 上跑客户端自检
+  （没有 tkinter 的 runner 自动跳过 GUI 用例：55 项 → 48 通过 / 7 跳过 / 0 失败）
+
 ## 0.2.2
 
 一台机器跑中转、另一台用 DSH 面板的部署（远程面板）。

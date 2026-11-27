@@ -98,6 +98,7 @@ npm 上是两个包，别装错：
 | 📝 | 结构化请求日志 | `requests.jsonl` 逐请求事件流（21 字段、缺失写 `null`、按大小轮转）+ 零依赖分析脚本 `scripts/stats.py` |
 | 🔌 | 适配器扩展 | 配置级接入（0 行）→ `adapters/ext/` 掉落（1 个文件）→ 内置 |
 | 🔒 | 安全边界 | 面板仅 loopback、密钥仓 0600、任何接口不回显密钥、写配置先校验先备份 |
+| 🪟 | Windows 桌面客户端 | [`winclient/`](winclient/README.md)：托盘常驻 + 单实例 + 五页（仪表盘 / 账号 / 接驳 / 请求 / 设置）；托管中转进程、离线也能加号、一键写 Codex 配置与环境变量并能还原。零第三方依赖（tkinter + ctypes） |
 | 🧰 | 工程完备 | CI（Python 3.10–3.12 × Node 20/22）、Docker / compose、systemd unit、Windows 任务计划、回归测试（结果以 CI 输出为准） |
 
 ## 端点
@@ -109,6 +110,7 @@ npm 上是两个包，别装错：
 | `GET /v1/pool/schema` | 已加载的适配器与窗口声明（面板据此渲染） |
 | `POST /v1/pool/accounts` · `/account/key` · `/account/remove` | 加号 / 换 key / 删号 |
 | `POST /v1/pool/refresh` · `/clear-cooldowns` · `/reload` | 立刻查额度 / 清冷却 / 热重载配置 |
+| `POST /v1/pool/shutdown` | 让服务端自己收尾退出（**仅 loopback**；供桌面客户端"停止"时保住内存里的 state） |
 | `GET /` · `/healthz` · `/metrics` | 控制台 / 就绪探针 / Prometheus 指标 |
 
 ## 和其他项目的关系
@@ -133,6 +135,7 @@ npm 上是两个包，别装错：
 | [docs/configuration.md](docs/configuration.md) | 配置逐字段参考（providers / accounts / sticky / 水位线…） |
 | [docs/adapters.md](docs/adapters.md) | Adapter 契约 + `adapters/ext/` 掉落目录 + 最小示例 |
 | [docs/troubleshooting.md](docs/troubleshooting.md) | 报错判据（502 / 503 / 日志 / 指标含义） |
+| [winclient/README.md](winclient/README.md) | Windows 桌面客户端：五页功能、会改哪些文件、打包 exe、自检 |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 分层、扩展点、踩过的坑 |
 | [docs/verification-20261106.md](docs/verification-20261106.md) | v0.2.0 端到端验收记录（测试 / 运行态 / 文档一致性抽查） |
 | [docs/analytics.md](docs/analytics.md) | 结构化请求日志分析：`stats.py` 用法与每个数怎么读 |

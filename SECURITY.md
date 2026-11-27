@@ -16,6 +16,8 @@ opencode-pool 是**单机单用户**的号池中转：它把多个自己付费�
 
 ### 边界
 
+- **停服接口仅 loopback**：`POST /v1/pool/shutdown` 是给桌面客户端"体面停止"用的，
+  非 127.0.0.1 直接 403 —— 远程面板能加号/换 key 不代表能停服，`allow_remote_panel` 也不放开它
 - **面板默认仅 loopback**：直连中转端口时，`/` 与 `/panel` 对非 127.0.0.1 的客户端直接 403
   （`panel is loopback-only`）。设 `allow_remote_panel: true` 可对「带对 `relay_token`」的
   远程客户端放行（面板等同于管理台，请只在受信内网使用；`relay_token` 为空时永远拒绝）。

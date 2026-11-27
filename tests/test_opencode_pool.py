@@ -2607,17 +2607,17 @@ class RemotePanelAuthTest(unittest.TestCase):
 
     def test_remote_refused_by_default_even_with_token(self):
         self.assertFalse(
-            self.handler("192.168.1.105", auth="Bearer t0k")._panel_authorized(),
+            self.handler("203.0.113.9", auth="Bearer t0k")._panel_authorized(),
             "没显式开 allow_remote_panel 时，带对 token 也不能开面板")
 
     def test_remote_allowed_with_flag_and_token(self):
         self.assertTrue(
-            self.handler("192.168.1.105", allow=True, auth="Bearer t0k")._panel_authorized())
+            self.handler("203.0.113.9", allow=True, auth="Bearer t0k")._panel_authorized())
 
     def test_remote_wrong_token_refused(self):
-        self.assertFalse(self.handler("192.168.1.105", allow=True, auth="Bearer nope")._panel_authorized())
-        self.assertFalse(self.handler("192.168.1.105", allow=True)._panel_authorized())
+        self.assertFalse(self.handler("203.0.113.9", allow=True, auth="Bearer nope")._panel_authorized())
+        self.assertFalse(self.handler("203.0.113.9", allow=True)._panel_authorized())
 
     def test_remote_refused_when_no_token_configured(self):
         """空 relay_token + 放开远程 = 谁都能进管理台；必须拒绝。"""
-        self.assertFalse(self.handler("192.168.1.105", token="", allow=True)._panel_authorized())
+        self.assertFalse(self.handler("203.0.113.9", token="", allow=True)._panel_authorized())
