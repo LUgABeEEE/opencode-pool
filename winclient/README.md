@@ -82,11 +82,11 @@ python -m opencodepool_client       # 等价
 ## 自检
 
 ```powershell
-python selftest.py          # 55 项：临时目录造配置 → 真起中转 → 加号/查额度/停服 → 日志解析 → 接驳写入 → 托盘/单实例
+python selftest.py          # 55–60 项：临时目录造配置 → 真起中转 → 加号/查额度/停服 → 日志解析 → 接驳写入 → 托盘/单实例
 python selftest.py --keep   # 保留临时目录排障
 ```
 
-没有 tkinter 或没有图形会话的机器（CI、Linux 服务器）也能跑：GUI 用例自动记 SKIP，
+没有 tkinter 或没有图形会话的机器（CI、Linux 服务器）也能跑：GUI 用例自动记 SKIP（只剩 55 项，Windows 上是 60 项），
 其余逻辑（配置写盘、进程托管、日志解析、Codex 片段合并）照常验证。
 
 GUI 冒烟（会自己退出）：
