@@ -1,6 +1,6 @@
 {
   "name": "opencode-pool",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "OpenCode 号池：把多个 OpenCode Go 订阅合成一个 OpenAI / Anthropic 兼容入口（Python 服务；DSH 插件另见 dsh-plugin-opencode-pool）",
   "license": "MIT",
   "repository": {
