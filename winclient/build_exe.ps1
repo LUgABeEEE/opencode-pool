@@ -1,14 +1,17 @@
-# 把客户端打成单个 exe（可选）
+# Build the client into a single exe (optional).
 #
-# 说明：exe 里只装"外壳"，不装 opencode-pool 内核。内核仍然由客户端用
-# `python -m opencode_pool serve` 拉起 —— 因为内核要 `requests`、要能热改配置，
-# 塞进 exe 只会让"改一行配置就要重新打包"。
+# The exe contains ONLY the shell, not the opencode-pool kernel. The kernel is
+# still started by the client via `python -m opencode_pool serve` -- it needs
+# `requests` and live-editable config, so bundling it would mean "repackage for
+# every one-line config change".
 #
-# 用法：
+# NOTE: this file must stay pure ASCII. Windows PowerShell 5.1 reads .ps1 files
+# as ANSI (cp936 on Chinese Windows), so UTF-8 Chinese text breaks the parser.
+#
+# Usage:
 #   pwsh -File build_exe.ps1
-#   pwsh -File build_exe.ps1 -OneFile        # 单文件（启动稍慢）
-#
-# 产物：dist\OpenCodePoolClient\OpenCodePoolClient.exe
+#   powershell -ExecutionPolicy Bypass -File build_exe.ps1
+#   pwsh -File build_exe.ps1 -OneFile        # single file (slower start)
 
 param(
     [switch]$OneFile,
@@ -16,22 +19,23 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-# 原生命令（python/pip/pyinstaller）非零退出不会自动终止脚本，这里显式收口
+# Native commands (python/pip/pyinstaller) do not honour $ErrorActionPreference,
+# so check their exit codes explicitly.
 function Assert-LastExit([string]$What) {
-    if ($LASTEXITCODE -ne 0) { throw "$What 失败（exit $LASTEXITCODE）" }
+    if ($LASTEXITCODE -ne 0) { throw "$What failed (exit $LASTEXITCODE)" }
 }
 $here = Split-Path -Parent $MyInvocation.MyCommand.Definition
 Set-Location $here
 
-Write-Host "[1/4] 生成图标 …"
+Write-Host "[1/4] generating icon ..."
 & $Python -c "import sys; sys.path.insert(0,'.'); from opencodepool_client import icon; print(icon.build_ico(r'app.ico'))"
-Assert-LastExit "生成图标"
+Assert-LastExit "icon generation"
 
-Write-Host "[2/4] 安装/更新 PyInstaller …"
+Write-Host "[2/4] installing/updating PyInstaller ..."
 & $Python -m pip install --quiet --upgrade pyinstaller
-Assert-LastExit "安装 PyInstaller"
+Assert-LastExit "PyInstaller install"
 
-Write-Host "[3/4] 打包 …"
+Write-Host "[3/4] packaging ..."
 $pyArgs = @(
     "--noconfirm", "--clean", "--windowed",
     "--name", "OpenCodePoolClient",
@@ -42,16 +46,16 @@ $pyArgs = @(
 if ($OneFile) { $pyArgs += "--onefile" }
 $pyArgs += "run_client.py"
 & $Python -m PyInstaller @pyArgs
-Assert-LastExit "PyInstaller 打包"
+Assert-LastExit "PyInstaller build"
 
-Write-Host "[4/4] 完成"
+Write-Host "[4/4] done"
 if ($OneFile) {
-    Write-Host "  产物：dist\OpenCodePoolClient.exe"
+    Write-Host "  output: dist\OpenCodePoolClient.exe"
 } else {
-    Write-Host "  产物：dist\OpenCodePoolClient\OpenCodePoolClient.exe"
+    Write-Host "  output: dist\OpenCodePoolClient\OpenCodePoolClient.exe"
 }
 Write-Host ""
-Write-Host "首次运行请在「设置」里确认："
-Write-Host "  · 项目目录 = opencode-pool 仓库根（能看见 opencode_pool\ 那一层）"
-Write-Host "  · Python    = 装了 requests 的解释器（exe 不能自己当中转的解释器，必须显式指定）"
-
+Write-Host "On first run, check Settings:"
+Write-Host "  - project dir = the opencode-pool repo root (the level that contains opencode_pool\)"
+Write-Host "  - python      = an interpreter that has requests installed"
+Write-Host "                  (the exe cannot host the relay itself; set it explicitly)"

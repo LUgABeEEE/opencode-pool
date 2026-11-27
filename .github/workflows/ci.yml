@@ -59,6 +59,28 @@ jobs:
         if: matrix.python-version == '3.12'
         run: python3 winclient/selftest.py
 
+      # Windows PowerShell 5.1 按系统 ANSI（中文系统 cp936）读 .ps1，cmd.exe 同理读 .cmd：
+      # 这两个文件里出现 UTF-8 中文会直接解析失败。0.3.1 就是被这个坑过一次。
+      - name: Windows 脚本保持纯 ASCII
+        if: matrix.python-version == '3.12'
+        run: |
+          python3 - <<'PY'
+          import pathlib
+          import sys
+
+          bad = []
+          for pattern in ("*.ps1", "*.cmd", "*.bat"):
+              for path in pathlib.Path(".").rglob(pattern):
+                  if ".git" in path.parts:
+                      continue
+                  if any(byte > 127 for byte in path.read_bytes()):
+                      bad.append(str(path))
+          if bad:
+              print("这些 Windows 脚本含非 ASCII 字节，PS 5.1 / cmd 会解析失败：" + ", ".join(bad))
+              sys.exit(1)
+          print("ok: .ps1/.cmd/.bat 全部是纯 ASCII")
+          PY
+
   node:
     runs-on: ubuntu-latest
     timeout-minutes: 10

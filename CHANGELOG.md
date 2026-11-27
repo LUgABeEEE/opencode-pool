@@ -1,5 +1,21 @@
 # 变更记录
 
+## 0.3.1
+
+Windows 真机验证（Win11 + Python 3.13）抓出来的两个打包/启动问题。
+
+- 修：`winclient/build_exe.ps1` 与 `winclient/run_client.cmd` 里写了中文，而
+  Windows PowerShell 5.1（以及 cmd.exe）是**按系统 ANSI 码页**读脚本的（中文系统 cp936），
+  UTF-8 中文会直接把脚本读坏 —— `build_exe.ps1` 报 `UnexpectedToken` 解析失败，
+  `run_client.cmd` 的提示变乱码。两个文件改为纯 ASCII（英文提示），并在 CI 加了
+  "Windows 脚本必须纯 ASCII" 的守门，避免回归
+- 验证（elysia，Win11 23H2 / Python 3.13.9）：
+  - `python winclient/selftest.py` → **60 项：通过 60，跳过 0，失败 0**
+    （比 Linux 多 5 项：Tk 页面渲染、单实例命名互斥等平台相关用例在 Windows 上真跑）
+  - `powershell -File winclient\build_exe.ps1` → 退出码 0，产物
+    `dist\OpenCodePoolClient\OpenCodePoolClient.exe` 2.28 MB
+- 文档：`docs/verification-20261127.md` 补 Windows 一节
+
 ## 0.3.0
 
 Windows 桌面客户端（`winclient/`），以及为它配套的一处服务端改动和一轮评审修复。

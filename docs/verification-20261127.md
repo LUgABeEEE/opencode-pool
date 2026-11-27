@@ -36,9 +36,25 @@ python3 winclient/selftest.py                                    # 55 项：48 �
 | 停止保状态 | `POST /v1/pool/shutdown` 仅 loopback；远端请求 403（`test_remote_*` 已有断言） |
 | 单实例 | 非 Windows 判 SKIP（`available=False`），不再误报失败 |
 
-## 未覆盖
+## Windows 真机（2026-11-27 晚，0.3.1 的由来）
 
-- Windows 真机上的托盘图标、注册表写入（`HKCU\Environment`）、PyInstaller 打包：
-  本机是 Linux，只有代码级校验与自检里的逻辑用例。发布前建议在 Windows 上跑一次
-  `python winclient/selftest.py` + `pwsh -File winclient/build_exe.ps1`。
+机器：elysia（Win11 23H2 + Python 3.13.9），通过 SSH 非交互会话执行，纯 CPU。
+
+```
+git clone --depth 1 --branch v0.3.0 https://github.com/LUgABeEEE/opencode-pool.git
+cd winclient && python selftest.py
+#   共 60 项：通过 60，跳过 0，失败 0
+#   （Linux 上 55 项，多出来的 5 项是 Tk 页面渲染 / 命名互斥等平台相关用例）
+powershell -NoProfile -ExecutionPolicy Bypass -File .\build_exe.ps1
+#   退出码 0，dist\OpenCodePoolClient\OpenCodePoolClient.exe = 2,278,005 B
+```
+
+**由此发现 0.3.1 修的问题**：`build_exe.ps1` 里的中文提示在 Windows PowerShell 5.1 下
+（按 cp936 读 UTF-8 脚本）直接 `UnexpectedToken` 解析失败，脚本从未在 5.1 上跑通过；
+`run_client.cmd` 的提示同样变乱码。两个文件已改纯 ASCII，CI 增加守门。
+
+## 仍未覆盖
+
+- 托盘图标在真实桌面会话里的显示效果、`HKCU\Environment` 写入与还原（会改用户环境，
+  验证时故意没做，避免污染）；
 - 上游真实账号的额度/限流行为：自检用假 key，只验证"401 不影响进程"。
